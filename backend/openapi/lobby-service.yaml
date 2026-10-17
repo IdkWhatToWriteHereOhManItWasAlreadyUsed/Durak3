@@ -1,0 +1,188 @@
+openapi: 3.0.3
+info:
+  title: Durak Lobby Service
+  version: 1.0.0
+  description: >
+    Учёт присутствия игроков. Заменяет периодическую рассылку
+    `SERVER:CLIENTS:...` из DurakSharpServer: клиент сам сообщает о себе
+    (heartbeat), а список онлайн-игроков отдаётся по запросу и/или пушится
+    по WebSocket через gateway.
+servers:
+  - url: http://localhost:8082
+    description: Локальная разработка
+tags:
+  - name: Presence
+
+paths:
+  /presence:
+    post:
+      tags: [Presence]
+      summary: Войти в лобби (отметить себя онлайн)
+      description: >
+        Регистрирует сессию присутствия. Возвращает `sessionId`, который
+        нужно периодически «пинговать» через /presence/{sessionId}/heartbeat.
+      operationId: openPresence
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresenceOpenRequest'
+      responses:
+        '201':
+          description: Присутствие зарегистрировано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Presence'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      tags: [Presence]
+      summary: Список онлайн-игроков
+      description: Аналог `SERVER:CLIENTS:<id>:<name>,...`.
+      operationId: listOnline
+      parameters:
+        - name: excludeSelf
+          in: query
+          schema: { type: boolean, default: true }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Онлайн-игроки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OnlineList'
+
+  /presence/{sessionId}:
+    delete:
+      tags: [Presence]
+      summary: Выйти из лобби
+      operationId: closePresence
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '204':
+          description: Присутствие закрыто
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /presence/{sessionId}/heartbeat:
+    post:
+      tags: [Presence]
+      summary: Продлить присутствие (heartbeat)
+      description: Клиент вызывает раз в N секунд, иначе сессия истекает.
+      operationId: heartbeat
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Обновлённая сессия присутствия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Presence'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /presence/{playerId}/status:
+    get:
+      tags: [Presence]
+      summary: Статус конкретного игрока
+      operationId: getStatus
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Статус
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresenceStatus'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Требуется аутентификация
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    PresenceOpenRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [in_lobby, in_game, away]
+          default: in_lobby
+        clientVersion: { type: string, example: "1.0.0" }
+    Presence:
+      type: object
+      required: [sessionId, playerId, name, status, lastSeen]
+      properties:
+        sessionId: { type: string, format: uuid }
+        playerId: { type: string, format: uuid }
+        name: { type: string }
+        status:
+          type: string
+          enum: [in_lobby, in_game, away]
+        lastSeen: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    PresenceStatus:
+      type: object
+      required: [playerId, online]
+      properties:
+        playerId: { type: string, format: uuid }
+        online: { type: boolean }
+        status:
+          type: string
+          enum: [in_lobby, in_game, away]
+          nullable: true
+        lastSeen: { type: string, format: date-time, nullable: true }
+    OnlineList:
+      type: object
+      required: [total, items]
+      properties:
+        total: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Presence' }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: NOT_FOUND }
+        message: { type: string, example: Presence session not found }

@@ -1,0 +1,284 @@
+openapi: 3.0.3
+info:
+  title: Durak Matchmaking Service
+  version: 1.0.0
+  description: >
+    Приглашения и создание матчей. Заменяет пересылку пакетов `GO?` / `GO!` /
+    `NO!` и ожидание ответа с таймаутом из DurakSharpServer. При принятии
+    приглашения создаётся матч и запрашивается партия в game-service.
+servers:
+  - url: http://localhost:8083
+    description: Локальная разработка
+tags:
+  - name: Invites
+  - name: Matches
+
+paths:
+  /invites:
+    post:
+      tags: [Invites]
+      summary: Пригласить игрока (аналог `GO?`)
+      operationId: createInvite
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInviteRequest'
+      responses:
+        '201':
+          description: Приглашение отправлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '409':
+          description: Приглашение уже активно или получатель занят
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    get:
+      tags: [Invites]
+      summary: Список приглашений игрока
+      operationId: listInvites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: direction
+          in: query
+          schema: { type: string, enum: [incoming, outgoing, all], default: all }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, accepted, declined, expired, cancelled, all]
+            default: pending
+      responses:
+        '200':
+          description: Приглашения
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Invite' }
+
+  /invites/{inviteId}:
+    get:
+      tags: [Invites]
+      summary: Получить приглашение
+      operationId: getInvite
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Приглашение
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /invites/{inviteId}/accept:
+    post:
+      tags: [Invites]
+      summary: Принять приглашение (аналог `GO!`)
+      description: >
+        Принимает приглашение, создаёт матч и партию. Игрок, отправивший
+        приглашение, ходит первым (аналог `StartFirst = true`).
+      operationId: acceptInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Матч создан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Match' }
+        '409':
+          description: Приглашение уже обработано истекло
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /invites/{inviteId}/decline:
+    post:
+      tags: [Invites]
+      summary: Отклонить приглашение (аналог `NO!`)
+      operationId: declineInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Приглашение отклонено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /invites/{inviteId}/cancel:
+    post:
+      tags: [Invites]
+      summary: Отменить своё приглашение
+      operationId: cancelInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Приглашение отменено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /matches:
+    get:
+      tags: [Matches]
+      summary: Список матчей игрока
+      operationId: listMatches
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, finished, all], default: all }
+      responses:
+        '200':
+          description: Матчи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Match' }
+
+  /matches/{matchId}:
+    get:
+      tags: [Matches]
+      summary: Получить матч
+      operationId: getMatch
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+      responses:
+        '200':
+          description: Матч
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Match' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    InviteId:
+      name: inviteId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    MatchId:
+      name: matchId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Нет прав на операцию
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unprocessable:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    CreateInviteRequest:
+      type: object
+      required: [toPlayerId]
+      properties:
+        toPlayerId: { type: string, format: uuid }
+        ttlSeconds:
+          type: integer
+          minimum: 5
+          maximum: 120
+          default: 30
+          description: Таймаут ожидания ответа (в оригинале ~10 секунд)
+    Invite:
+      type: object
+      required: [id, fromPlayerId, toPlayerId, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromPlayerId: { type: string, format: uuid }
+        fromName: { type: string }
+        toPlayerId: { type: string, format: uuid }
+        toName: { type: string }
+        status:
+          type: string
+          enum: [pending, accepted, declined, expired, cancelled]
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    Match:
+      type: object
+      required: [id, gameId, players, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        gameId: { type: string, format: uuid }
+        players:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { $ref: '#/components/schemas/MatchPlayer' }
+        status:
+          type: string
+          enum: [active, finished]
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+    MatchPlayer:
+      type: object
+      required: [playerId, name]
+      properties:
+        playerId: { type: string, format: uuid }
+        name: { type: string }
+        seat: { type: integer, minimum: 0, maximum: 1 }
+        isFirstAttacker: { type: boolean }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: CONFLICT }
+        message: { type: string, example: Invite already accepted }

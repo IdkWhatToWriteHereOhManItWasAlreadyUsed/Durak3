@@ -1,0 +1,265 @@
+openapi: 3.0.3
+info:
+  title: Durak Identity Service
+  version: 1.0.0
+  description: >
+    Аккаунты игроков и аутентификация. Аналог процедуры регистрации из
+    DurakSharpServer: клиент называет имя, сервер присваивает ему ID.
+    В микросервисной версии ID выдаётся один раз и подтверждается JWT.
+servers:
+  - url: http://localhost:8081
+    description: Локальная разработка
+tags:
+  - name: Auth
+  - name: Players
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Регистрация нового игрока
+      description: Создаёт аккаунт по имени и возвращает идентификатор и JWT.
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Игрок создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Вход по идентификатору игрока
+      description: >
+        Упрощённый вход: клиент предъявляет сохранённый playerId и получает
+        свежий JWT (в оригинале роль «паспорта» играл хеш IP-адреса).
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Обновить access-токен
+      operationId: refreshToken
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Новый токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /players:
+    get:
+      tags: [Players]
+      summary: Поиск игроков
+      operationId: listPlayers
+      parameters:
+        - name: name
+          in: query
+          description: Подстрока имени
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Список игроков
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerList'
+
+  /players/me:
+    get:
+      tags: [Players]
+      summary: Текущий игрок
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Player'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Players]
+      summary: Изменить профиль текущего игрока
+      operationId: updateMe
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerUpdate'
+      responses:
+        '200':
+          description: Обновлённый профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Player'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /players/{playerId}:
+    get:
+      tags: [Players]
+      summary: Профиль игрока по ID
+      operationId: getPlayer
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Player'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /players/{playerId}/stats:
+    get:
+      tags: [Players]
+      summary: Статистика игрока
+      operationId: getPlayerStats
+      parameters:
+        - $ref: '#/components/parameters/PlayerId'
+      responses:
+        '200':
+          description: Статистика
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerStats'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PlayerId:
+      name: playerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Требуется аутентификация
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Конфликт (имя уже занято)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 24
+          example: Рахмат
+    LoginRequest:
+      type: object
+      required: [playerId]
+      properties:
+        playerId: { type: string, format: uuid }
+    AuthResponse:
+      type: object
+      required: [playerId, name, accessToken, expiresIn]
+      properties:
+        playerId: { type: string, format: uuid }
+        name: { type: string }
+        accessToken: { type: string }
+        tokenType: { type: string, default: Bearer }
+        expiresIn: { type: integer, description: Время жизни токена в секундах }
+    Player:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Рахмат }
+        createdAt: { type: string, format: date-time }
+        avatarUrl: { type: string, format: uri, nullable: true }
+    PlayerUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 24 }
+        avatarUrl: { type: string, format: uri, nullable: true }
+    PlayerList:
+      type: object
+      required: [total, items]
+      properties:
+        total: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Player' }
+    PlayerStats:
+      type: object
+      properties:
+        playerId: { type: string, format: uuid }
+        gamesPlayed: { type: integer, minimum: 0 }
+        wins: { type: integer, minimum: 0 }
+        losses: { type: integer, minimum: 0 }
+        drawGames: { type: integer, minimum: 0 }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: NOT_FOUND }
+        message: { type: string, example: Player not found }

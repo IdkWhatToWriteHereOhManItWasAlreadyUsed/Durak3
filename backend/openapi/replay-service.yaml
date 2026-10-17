@@ -1,0 +1,270 @@
+openapi: 3.0.3
+info:
+  title: Durak Replay Service
+  version: 1.0.0
+  description: >
+    Хранение и выдача повторов партий. Заменяет файлы `.dr` и команды
+    `REPLAYS` / `GETREPLAY:<n>` из DurakSharpServer. Повтор содержит имена
+    игроков, начальное состояние и список ходов.
+servers:
+  - url: http://localhost:8085
+    description: Локальная разработка
+tags:
+  - name: Replays
+
+paths:
+  /replays:
+    get:
+      tags: [Replays]
+      summary: Список повторов (аналог команды `REPLAYS`)
+      operationId: listReplays
+      parameters:
+        - name: playerId
+          in: query
+          description: Фильтр по участнику
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Список повторов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplayList'
+    post:
+      tags: [Replays]
+      summary: Сохранить повтор
+      description: >
+        Внутренний вызов от game-service по завершении партии. Повтор содержит
+        начальную раздачу и все ходы, что позволяет воспроизвести партию.
+      operationId: createReplay
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReplayRequest'
+      responses:
+        '201':
+          description: Повтор сохранён
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Replay' }
+
+  /replays/{replayId}:
+    get:
+      tags: [Replays]
+      summary: Получить повтор (аналог `GETREPLAY:<n>`)
+      operationId: getReplay
+      parameters:
+        - $ref: '#/components/parameters/ReplayId'
+      responses:
+        '200':
+          description: Полный повтор
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Replay' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Replays]
+      summary: Удалить повтор
+      operationId: deleteReplay
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReplayId'
+      responses:
+        '204':
+          description: Удалено
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /replays/{replayId}/frames:
+    get:
+      tags: [Replays]
+      summary: Кадры повтора (состояния по шагам)
+      description: >
+        Отдаёт последовательность состояний для проигрывания/перемотки
+        (порт ReplayForm: кнопки «назад»/«вперёд»).
+      operationId: getReplayFrames
+      parameters:
+        - $ref: '#/components/parameters/ReplayId'
+        - name: from
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: to
+          in: query
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Кадры
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [replayId, total]
+                properties:
+                  replayId: { type: string, format: uuid }
+                  total: { type: integer }
+                  frames:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReplayFrame' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ReplayId:
+      name: replayId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    NotFound:
+      description: Повтор не найден
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Suit:
+      type: integer
+      minimum: 0
+      maximum: 3
+    Card:
+      type: object
+      required: [suit, power]
+      properties:
+        suit: { $ref: '#/components/schemas/Suit' }
+        power: { type: integer, minimum: 6, maximum: 14 }
+    PlayerHand:
+      type: object
+      required: [playerId, name, cards]
+      properties:
+        playerId: { type: string, format: uuid }
+        name: { type: string }
+        cards:
+          type: array
+          items: { $ref: '#/components/schemas/Card' }
+    ReplayMove:
+      type: object
+      required: [sequence, playerId, type]
+      properties:
+        sequence: { type: integer }
+        playerId: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [CARD, MOVE, GRAB, WIN]
+        card: { $ref: '#/components/schemas/Card' }
+        stack: { type: integer, minimum: 0, maximum: 3 }
+        at: { type: string, format: date-time }
+    InitialState:
+      type: object
+      required: [players, deck, trump]
+      properties:
+        players:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { $ref: '#/components/schemas/PlayerHand' }
+        deck:
+          type: array
+          description: Колода в порядке от верхней карты к козырю (нижней)
+          items: { $ref: '#/components/schemas/Card' }
+        trump: { $ref: '#/components/schemas/Suit' }
+        firstAttackerId: { type: string, format: uuid }
+    Replay:
+      type: object
+      required: [id, player1, player2, createdAt, initialState, moves]
+      properties:
+        id: { type: string, format: uuid }
+        gameId: { type: string, format: uuid, nullable: true }
+        player1: { type: string, description: Имя первого игрока }
+        player2: { type: string, description: Имя второго игрока }
+        winnerId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        initialState: { $ref: '#/components/schemas/InitialState' }
+        moves:
+          type: array
+          items: { $ref: '#/components/schemas/ReplayMove' }
+    ReplaySummary:
+      type: object
+      required: [id, player1, player2, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        player1: { type: string }
+        player2: { type: string }
+        winnerId: { type: string, format: uuid, nullable: true }
+        movesCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+    ReplayList:
+      type: object
+      required: [total, items]
+      properties:
+        total: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ReplaySummary' }
+    ReplayFrame:
+      type: object
+      required: [index, label]
+      properties:
+        index: { type: integer }
+        label: { type: string, example: "Игрок Рахмат ходит шестёркой бубен" }
+        state:
+          type: object
+          description: >
+            Полное состояние на этом шаге (карты обоих игроков открыты,
+            колода, стол, козырь, очерёдность) — как в SessionGraphics при
+            проигрывании повтора.
+          properties:
+            player1Cards:
+              type: array
+              items: { $ref: '#/components/schemas/Card' }
+            player2Cards:
+              type: array
+              items: { $ref: '#/components/schemas/Card' }
+            deck:
+              type: array
+              items: { $ref: '#/components/schemas/Card' }
+            table:
+              type: array
+              items:
+                type: array
+                items: { $ref: '#/components/schemas/Card' }
+            trump: { $ref: '#/components/schemas/Suit' }
+            currentPlayerIndex: { type: integer, minimum: 0, maximum: 1 }
+            attackerIndex: { type: integer, minimum: 0, maximum: 1 }
+    CreateReplayRequest:
+      type: object
+      required: [player1, player2, initialState, moves]
+      properties:
+        gameId: { type: string, format: uuid, nullable: true }
+        player1: { type: string }
+        player2: { type: string }
+        winnerId: { type: string, format: uuid, nullable: true }
+        initialState: { $ref: '#/components/schemas/InitialState' }
+        moves:
+          type: array
+          items: { $ref: '#/components/schemas/ReplayMove' }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: NOT_FOUND }
+        message: { type: string, example: Replay not found }

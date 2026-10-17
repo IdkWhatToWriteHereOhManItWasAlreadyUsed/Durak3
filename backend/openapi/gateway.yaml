@@ -1,0 +1,420 @@
+openapi: 3.0.3
+info:
+  title: Durak API Gateway (BFF)
+  version: 1.0.0
+  description: >
+    Единая точка входа для клиента. Агрегирует REST-вызовы к микросервисам и
+    держит WebSocket-соединение для realtime-событий (список онлайн-игроков,
+    приглашения, ходы партии).
+
+
+    ## WebSocket
+
+    `GET /ws?token=<JWT>` (HTTP Upgrade). После подключения сервер шлёт
+    клиенту события в формате `{ "type": "...", "payload": {...} }`:
+
+
+    | type | payload | Аналог в оригинале |
+
+    |---|---|---|
+
+    | `lobby.players` | `{ items: [{playerId,name,status}] }` | `SERVER:CLIENTS:...` |
+
+    | `presence.online` / `presence.offline` | `{ playerId, name }` | появление/уход |
+
+    | `invite.created` | `Invite` | `GO?` |
+
+    | `invite.accepted` | `Match` | `GO!` |
+
+    | `invite.declined` | `Invite` | `NO!` |
+
+    | `game.started` | `GameState` | `PLAYER0:...DECK:...` |
+
+    | `game.state` | `GameState` | новое состояние |
+
+    | `game.move` | `AppliedMove` | `CARD:x;STACK:y`, `MOVE`, `GRAB` |
+
+    | `game.finished` | `GameResult` | `WIN` |
+
+
+    Клиент может слать команды: `invite.create`, `invite.accept`,
+    `invite.decline`, `game.move`, `presence.heartbeat`. Ответ доставляется
+    событием, ошибки — `error`.
+servers:
+  - url: http://localhost:8080
+    description: Локальная разработка
+tags:
+  - name: Auth
+  - name: Lobby
+  - name: Matchmaking
+  - name: Game
+  - name: Replay
+  - name: Realtime
+
+paths:
+  # ------------------------------- Auth -----------------------------------
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Регистрация (проксирует identity-service)
+      operationId: gatewayRegister
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 24 }
+      responses:
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Вход (проксирует identity-service)
+      operationId: gatewayLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [playerId]
+              properties:
+                playerId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Успех
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  # ------------------------------- Lobby ----------------------------------
+  /api/lobby/players:
+    get:
+      tags: [Lobby]
+      summary: Список онлайн-игроков
+      description: Агрегирует lobby-service (presence) + identity-service (имена).
+      operationId: gatewayOnlinePlayers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: excludeSelf
+          in: query
+          schema: { type: boolean, default: true }
+      responses:
+        '200':
+          description: Онлайн-игроки
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/OnlinePlayer' }
+
+  /api/lobby/heartbeat:
+    post:
+      tags: [Lobby]
+      summary: Heartbeat присутствия
+      operationId: gatewayHeartbeat
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Принято
+
+  # ---------------------------- Matchmaking -------------------------------
+  /api/invites:
+    post:
+      tags: [Matchmaking]
+      summary: Пригласить игрока
+      operationId: gatewayCreateInvite
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toPlayerId]
+              properties:
+                toPlayerId: { type: string, format: uuid }
+                ttlSeconds: { type: integer, minimum: 5, maximum: 120, default: 30 }
+      responses:
+        '201':
+          description: Приглашение создано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+        '409':
+          $ref: '#/components/responses/Error'
+    get:
+      tags: [Matchmaking]
+      summary: Мои приглашения
+      operationId: gatewayListInvites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: direction
+          in: query
+          schema: { type: string, enum: [incoming, outgoing, all], default: all }
+      responses:
+        '200':
+          description: Приглашения
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Invite' }
+
+  /api/invites/{inviteId}/accept:
+    post:
+      tags: [Matchmaking]
+      summary: Принять приглашение (создаёт матч и партию)
+      operationId: gatewayAcceptInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Матч создан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Match' }
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /api/invites/{inviteId}/decline:
+    post:
+      tags: [Matchmaking]
+      summary: Отклонить приглашение
+      operationId: gatewayDeclineInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Отклонено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+
+  # -------------------------------- Game ----------------------------------
+  /api/games/{gameId}:
+    get:
+      tags: [Game]
+      summary: Состояние партии
+      operationId: gatewayGameState
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Состояние партии
+          content:
+            application/json:
+              schema: { $ref: './game-service.yaml#/components/schemas/GameState' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/games/{gameId}/moves:
+    post:
+      tags: [Game]
+      summary: Сделать ход
+      operationId: gatewayMakeMove
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: './game-service.yaml#/components/schemas/MoveRequest' }
+      responses:
+        '200':
+          description: Новое состояние
+          content:
+            application/json:
+              schema: { $ref: './game-service.yaml#/components/schemas/GameState' }
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /api/games/{gameId}/resign:
+    post:
+      tags: [Game]
+      summary: Сдаться
+      operationId: gatewayResign
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Партия завершена
+          content:
+            application/json:
+              schema: { $ref: './game-service.yaml#/components/schemas/GameResult' }
+
+  # ------------------------------- Replay ---------------------------------
+  /api/replays:
+    get:
+      tags: [Replay]
+      summary: Список повторов
+      operationId: gatewayListReplays
+      parameters:
+        - name: playerId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Повторы
+          content:
+            application/json:
+              schema: { $ref: './replay-service.yaml#/components/schemas/ReplayList' }
+
+  /api/replays/{replayId}:
+    get:
+      tags: [Replay]
+      summary: Получить повтор
+      operationId: gatewayGetReplay
+      parameters:
+        - $ref: '#/components/parameters/ReplayId'
+      responses:
+        '200':
+          description: Повтор
+          content:
+            application/json:
+              schema: { $ref: './replay-service.yaml#/components/schemas/Replay' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  # ------------------------------ Realtime --------------------------------
+  /ws:
+    get:
+      tags: [Realtime]
+      summary: WebSocket-канал realtime-событий
+      description: >
+        Апгрейд до WebSocket. Требует JWT в query-параметре `token`.
+        Формат и перечень событий — в описании сервиса (info.description).
+      operationId: websocket
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '101':
+          description: Switching Protocols
+        '401':
+          $ref: '#/components/responses/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    InviteId:
+      name: inviteId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    GameId:
+      name: gameId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReplayId:
+      name: replayId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Error:
+      description: Ошибка
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    AuthResponse:
+      type: object
+      required: [playerId, name, accessToken]
+      properties:
+        playerId: { type: string, format: uuid }
+        name: { type: string }
+        accessToken: { type: string }
+        tokenType: { type: string, default: Bearer }
+        expiresIn: { type: integer }
+    OnlinePlayer:
+      type: object
+      required: [playerId, name]
+      properties:
+        playerId: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [in_lobby, in_game, away] }
+        lastSeen: { type: string, format: date-time }
+    Invite:
+      type: object
+      required: [id, fromPlayerId, toPlayerId, status]
+      properties:
+        id: { type: string, format: uuid }
+        fromPlayerId: { type: string, format: uuid }
+        fromName: { type: string }
+        toPlayerId: { type: string, format: uuid }
+        toName: { type: string }
+        status: { type: string, enum: [pending, accepted, declined, expired, cancelled] }
+        expiresAt: { type: string, format: date-time }
+    Match:
+      type: object
+      required: [id, gameId, players, status]
+      properties:
+        id: { type: string, format: uuid }
+        gameId: { type: string, format: uuid }
+        status: { type: string, enum: [active, finished] }
+        players:
+          type: array
+          items:
+            type: object
+            properties:
+              playerId: { type: string, format: uuid }
+              name: { type: string }
+              seat: { type: integer }
+              isFirstAttacker: { type: boolean }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: BAD_REQUEST }
+        message: { type: string, example: Invalid request }

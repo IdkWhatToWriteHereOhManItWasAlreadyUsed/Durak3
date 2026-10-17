@@ -1,0 +1,372 @@
+openapi: 3.0.3
+info:
+  title: Durak Game Service
+  version: 1.0.0
+  description: >
+    Авторитетный сервис партий. Хранит состояние, проверяет правила и применяет
+    ходы. Формат карт и типы ходов совпадают с DurakSharpServer, чтобы клиент
+    и существующие повторы остались совместимыми.
+
+    Правила (порт `GameSession.cs`):
+
+    * Колода 36 карт (6..14, 4 масти). Каждому игроку по 6 карт.
+    * `trump` — масть нижней карты колоды.
+    * Стол состоит из до 4 стопок (`table`). В стопке нечётное число карт —
+      есть неотбитая карта, чётное — стопка закрыта.
+    * Атакующий (`attackerIndex`) кладёт карту в чётную стопку; подкидывать
+      можно карту того же достоинства, что уже есть на столе.
+    * Защищающийся (`defenderIndex`) бьёт верхнюю карту нечётной стопки картой
+      той же масти старшего достоинства либо козырем.
+    * `MOVE` — завершить атаку/отбой; `GRAB` — забрать карты со стола;
+      `WIN` — зафиксировать победу.
+servers:
+  - url: http://localhost:8084
+    description: Локальная разработка
+tags:
+  - name: Games
+  - name: Moves
+
+paths:
+  /games:
+    post:
+      tags: [Games]
+      summary: Создать партию
+      description: >
+        Создаёт партию для двух игроков: перемешивает колоду, раздаёт по 6 карт,
+        определяет козырь и первого атакующего (обычно вызывается
+        matchmaking-service).
+      operationId: createGame
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGameRequest'
+      responses:
+        '201':
+          description: Партия создана
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Game' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /games/{gameId}:
+    get:
+      tags: [Games]
+      summary: Получить партию
+      operationId: getGame
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Партия
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Game' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /games/{gameId}/state:
+    get:
+      tags: [Games]
+      summary: Получить состояние партии для игрока
+      description: >
+        Возвращает видимое состояние: карты игрока открыты, карты соперника —
+        скрыты (`hiddenCards` — количество). Аналог сообщения
+        `PLAYER0:...;PLAYER1:...;DECK:...`.
+      operationId: getGameState
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+        - name: playerId
+          in: query
+          required: true
+          description: Кто запрашивает (влияет на видимость карт)
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Состояние
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameState' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /games/{gameId}/moves:
+    post:
+      tags: [Moves]
+      summary: Сделать ход
+      description: >
+        Применяет ход и возвращает новое состояние. Типы ходов:
+
+        * `CARD` — положить/побить карту (`card` + `stack`);
+        * `MOVE` — передать ход / завершить отбой (аналог пакета `MOVE`);
+        * `GRAB` — забрать карты со стола (аналог `GRAB`);
+        * `WIN` — подтвердить победу (аналог `WIN`).
+
+        Сервис проверяет очерёдность и правила; при нарушении — 409.
+      operationId: makeMove
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveRequest'
+      responses:
+        '200':
+          description: Ход принят, новое состояние
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameState' }
+        '409':
+          description: Ход невозможен (не ваш ход или нарушены правила)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /games/{gameId}/moves/history:
+    get:
+      tags: [Moves]
+      summary: История ходов
+      operationId: getMoveHistory
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Список ходов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AppliedMove' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /games/{gameId}/resign:
+    post:
+      tags: [Games]
+      summary: Сдаться
+      operationId: resign
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [playerId]
+              properties:
+                playerId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Партия завершена
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Game' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /games/{gameId}/result:
+    get:
+      tags: [Games]
+      summary: Результат партии
+      operationId: getGameResult
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Результат
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameResult' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    GameId:
+      name: gameId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Партия не найдена
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Suit:
+      type: integer
+      description: '0 — бубен, 1 — пик, 2 — червей, 3 — крестей'
+      minimum: 0
+      maximum: 3
+    Power:
+      type: integer
+      description: 'Достоинство: 6..14 (11=В, 12=Д, 13=К, 14=А)'
+      minimum: 6
+      maximum: 14
+    Card:
+      type: object
+      required: [suit, power]
+      properties:
+        suit: { $ref: '#/components/schemas/Suit' }
+        power: { $ref: '#/components/schemas/Power' }
+    Stack:
+      type: array
+      description: Стопка на столе; нечётная длина — есть неотбитая карта
+      maxItems: 2
+      items: { $ref: '#/components/schemas/Card' }
+    PlayerPublic:
+      type: object
+      required: [playerId, name]
+      properties:
+        playerId: { type: string, format: uuid }
+        name: { type: string }
+        cardsLeft: { type: integer }
+        isAttacker: { type: boolean }
+    GameState:
+      type: object
+      required: [gameId, status, trump, deckSize, table, players, currentPlayerId, attackerId]
+      properties:
+        gameId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [waiting, active, finished]
+        trump: { $ref: '#/components/schemas/Suit' }
+        deckSize: { type: integer, description: Сколько карт осталось в колоде }
+        deckTrumpCard: { $ref: '#/components/schemas/Card' }
+        table:
+          type: array
+          maxItems: 4
+          items: { $ref: '#/components/schemas/Stack' }
+        players:
+          type: array
+          items: { $ref: '#/components/schemas/PlayerPublic' }
+        currentPlayerId: { type: string, format: uuid }
+        attackerId: { type: string, format: uuid }
+        defenderId: { type: string, format: uuid }
+        yourHand:
+          type: array
+          description: Карты запросившего игрока (открыты)
+          items: { $ref: '#/components/schemas/Card' }
+        hiddenOpponentCards:
+          type: integer
+          description: Сколько карт у соперника (скрыты)
+        movesCount: { type: integer }
+    CreateGameRequest:
+      type: object
+      required: [players]
+      properties:
+        players:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: object
+            required: [playerId, name]
+            properties:
+              playerId: { type: string, format: uuid }
+              name: { type: string }
+        matchId: { type: string, format: uuid, nullable: true }
+        firstAttackerId:
+          type: string
+          format: uuid
+          description: Кто атакует первым (по умолчанию — первый в players)
+        deckSize:
+          type: integer
+          enum: [24, 36]
+          default: 36
+          description: Вариант колоды (в оригинале 36)
+    MoveRequest:
+      type: object
+      required: [playerId, type]
+      properties:
+        playerId: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [CARD, MOVE, GRAB, WIN]
+        card:
+          allOf: [{ $ref: '#/components/schemas/Card' }]
+          description: Обязательно для type=CARD
+        stack:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Номер стопки (0..3), обязателен для type=CARD
+        clientMoveId:
+          type: string
+          description: Идемпотентный ключ хода
+    AppliedMove:
+      type: object
+      required: [sequence, playerId, type, at]
+      properties:
+        sequence: { type: integer }
+        playerId: { type: string, format: uuid }
+        type: { type: string, enum: [CARD, MOVE, GRAB, WIN] }
+        card: { $ref: '#/components/schemas/Card' }
+        stack: { type: integer }
+        at: { type: string, format: date-time }
+    Game:
+      type: object
+      required: [id, status, players, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        matchId: { type: string, format: uuid, nullable: true }
+        status:
+          type: string
+          enum: [waiting, active, finished]
+        players:
+          type: array
+          items: { $ref: '#/components/schemas/PlayerPublic' }
+        trump: { $ref: '#/components/schemas/Suit' }
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        replayId: { type: string, format: uuid, nullable: true }
+    GameResult:
+      type: object
+      required: [gameId, status]
+      properties:
+        gameId: { type: string, format: uuid }
+        status: { type: string, enum: [active, finished] }
+        winnerId: { type: string, format: uuid, nullable: true }
+        loserId: { type: string, format: uuid, nullable: true }
+        reason:
+          type: string
+          enum: [emptied_hand, resign, timeout, draw]
+          nullable: true
+        replayId: { type: string, format: uuid, nullable: true }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: ILLEGAL_MOVE }
+        message: { type: string, example: Not your turn }
