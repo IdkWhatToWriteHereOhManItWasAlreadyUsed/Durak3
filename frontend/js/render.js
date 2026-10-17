@@ -26,12 +26,11 @@ class GameRenderer {
         if (opts.replay) {
             this._drawOpponentReplay(session);
             this._drawPlayerReplay(session);
-            this._drawDeckReplay(session);
         } else {
             this._drawOpponent(session);
             this._drawPlayer(session, opts);
-            this._drawDeck(session);
         }
+        this._drawDeck(session);
 
         this._drawStatus(session, opts);
         this._drawSelected(session, opts);
@@ -55,7 +54,7 @@ class GameRenderer {
             const stack = session.GameStack[i];
             if (stack.length > 0) {
                 const card = stack[stack.length - 1];
-                CardAssets.drawCard(ctx, card, x, GAME_Y, CARD_W, CARD_H);
+                if (card) CardAssets.drawCard(ctx, card, x, GAME_Y, CARD_W, CARD_H);
             } else {
                 ctx.strokeStyle = '#b8860b';
                 ctx.lineWidth = 2;
@@ -67,23 +66,21 @@ class GameRenderer {
     _drawDeck(session) {
         const { ctx } = this;
         const { W, CARD_W, CARD_H, GAME_Y, DIST } = FIELD;
-        if (session.Deck.length === 0) return;
+        const size = Number.isFinite(session.deckSize) ? session.deckSize : session.Deck.length;
+        if (size === 0) return;
+
         const x = W - CARD_W - DIST;
-        const trumpCard = session.Deck[session.Deck.length - 1];
-        CardAssets.drawCard(ctx, trumpCard, x, GAME_Y, CARD_W, CARD_H);
-        if (session.Deck.length > 1) {
+        const trumpCard = session.deckTrumpCard || session.Deck[size - 1];
+        if (trumpCard && Number.isInteger(trumpCard.suit)) {
+            CardAssets.drawCard(ctx, trumpCard, x, GAME_Y, CARD_W, CARD_H);
+        }
+        if (size > 1) {
             CardAssets.drawBack(ctx, x, GAME_Y - 30, CARD_W, CARD_H);
         }
     }
 
     _drawDeckReplay(session) {
-        const { ctx } = this;
-        const { W, CARD_W, CARD_H, DIST } = FIELD;
-        if (session.Deck.length === 0) return;
-        const x = W - CARD_W - DIST;
-        session.Deck.forEach((card, i) => {
-            CardAssets.drawCard(ctx, card, x, 20 * (i + 1), CARD_W, CARD_H);
-        });
+        this._drawDeck(session);
     }
 
     _drawOpponent(session) {
@@ -103,7 +100,7 @@ class GameRenderer {
         const cards = session.PlayerCards[1];
         const start = W / 2 - CARD_W / 2 - 6 * cards.length;
         cards.forEach((card, i) => {
-            CardAssets.drawCard(ctx, card, 12 * i + start, DIST, CARD_W, CARD_H);
+            if (card) CardAssets.drawCard(ctx, card, 12 * i + start, DIST, CARD_W, CARD_H);
         });
     }
 
@@ -129,7 +126,7 @@ class GameRenderer {
         const start = W / 2 - CARD_W / 2 - 6 * cards.length;
         const y = H - CARD_H - DIST;
         cards.forEach((card, i) => {
-            CardAssets.drawCard(ctx, card, i * 12 + start, y, CARD_W, CARD_H);
+            if (card) CardAssets.drawCard(ctx, card, i * 12 + start, y, CARD_W, CARD_H);
         });
     }
 
@@ -155,16 +152,18 @@ class GameRenderer {
         ctx.font = 'bold 14px "Segoe UI", sans-serif';
         ctx.textBaseline = 'top';
 
-        const suitSym = ['♦', '♠', '♥', '♣'][session.Trump];
-        const suitRed = session.Trump === 0 || session.Trump === 2;
+        const trump = Number.isInteger(session.Trump) ? session.Trump : 0;
+        const suitSym = ['♦', '♠', '♥', '♣'][trump] || '—';
+        const suitRed = trump === 0 || trump === 2;
+        const deckSize = Number.isFinite(session.deckSize) ? session.deckSize : session.Deck.length;
         ctx.fillStyle = '#ffffff';
-        ctx.fillText('Колода: ' + session.Deck.length, 12, 12);
+        ctx.fillText('Колода: ' + deckSize, 12, 12);
         ctx.fillText('Козырь: ', 12, 34);
         const tw = ctx.measureText('Козырь: ').width;
         ctx.fillStyle = suitRed ? '#ff6b6b' : '#ffffff';
         ctx.fillText(suitSym, 12 + tw, 34);
 
-        if (!opts.replay) {
+        if (!opts.replay && typeof session.isAttackerTurn === 'function') {
             ctx.fillStyle = '#ffe082';
             const who = session.isAttackerTurn()
                 ? (session.CurrPlayerMove === 0 ? 'Вы атакуете' : 'Соперник атакует')

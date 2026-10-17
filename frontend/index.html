@@ -9,8 +9,51 @@
 </head>
 <body>
 
-<div id="screen-menu" class="screen active">
+<!-- ============================== Вход ================================= -->
+<div id="screen-login" class="screen active">
+    <div class="login-window">
+        <div class="login-logo">ДУРАК</div>
+        <div class="login-sub">Ассемблерная Битва — онлайн</div>
+
+        <button id="btnGoogleLogin" class="google-btn">
+            <span class="google-g">G</span>
+            Войти через Google
+        </button>
+
+        <div id="devLogin" class="dev-login hidden">
+            <div class="dev-title">Локальный вход по accessToken</div>
+            <form id="tokenLoginForm" class="token-form">
+                <input id="tokenInput" type="text" autocomplete="off"
+                       placeholder="opaque accessToken из auth-service" />
+                <button class="btn-primary" type="submit">Войти</button>
+            </form>
+            <div class="dev-hint">
+                Токен выдаёт <code>POST /api/auth/google</code>. Для Google-входа
+                укажите <code>googleClientId</code> в <code>js/config.js</code>.
+            </div>
+        </div>
+
+        <p id="loginNote" class="login-note"></p>
+    </div>
+</div>
+
+<!-- ============================ Главное меню =========================== -->
+<div id="screen-menu" class="screen">
     <div class="menu-window">
+        <div class="menu-topbar">
+            <div class="user-chip">
+                <span class="user-mark">&#9824;</span>
+                <div class="user-text">
+                    <span id="userName" class="user-name"></span>
+                    <span id="userId" class="user-id"></span>
+                </div>
+            </div>
+            <div class="menu-topbar-right">
+                <span id="connStatus" class="conn-status" data-status="closed">Офлайн</span>
+                <button id="btnLogout" class="btn-ghost">Выйти</button>
+            </div>
+        </div>
+
         <div class="menu-tabs">
             <button class="menu-tab active" data-tab="find">Найти игру</button>
             <button class="menu-tab" data-tab="rules">Правила</button>
@@ -20,20 +63,20 @@
         <div class="menu-body">
             <section id="tab-find" class="tab-panel active">
                 <div class="find-bar">
-                    <input id="playerName" type="text" placeholder="Ваше имя" maxlength="24" />
                     <button id="refreshList" class="btn-primary">Обновить список</button>
+                    <span class="find-hint">Список обновляется автоматически каждые несколько секунд</span>
                 </div>
-                <div class="hint-label">Доступные игроки</div>
+                <div class="hint-label">Онлайн-игроки</div>
                 <div class="grid-wrap">
                     <table id="playersGrid" class="grid">
                         <thead>
-                            <tr><th>Имя игрока</th><th>ID</th><th>Действие</th></tr>
+                            <tr><th>Имя игрока</th><th>ID</th><th>Статус</th><th>Действие</th></tr>
                         </thead>
                         <tbody></tbody>
                     </table>
                 </div>
                 <div class="demo-row">
-                    <button id="demoInvite" class="btn-ghost">Симулировать входящее приглашение</button>
+                    <button id="resumeGame" class="btn-ghost hidden">Продолжить партию</button>
                 </div>
             </section>
 
@@ -57,6 +100,7 @@
                     <ul>
                         <li>Выберите свою карту и перетащите её на одну из стопок в центре стола.</li>
                         <li>Перелистывайте руку стрелками под игровым полем, если карт больше девяти.</li>
+                        <li>«Сдаться» завершает партию поражением, «Выйти в меню» оставляет её активной.</li>
                     </ul>
                 </div>
             </section>
@@ -69,7 +113,13 @@
                 <div class="grid-wrap">
                     <table id="replaysGrid" class="grid">
                         <thead>
-                            <tr><th>Игрок 1</th><th>Игрок 2</th><th>Повтор</th></tr>
+                            <tr>
+                                <th>Игрок 1</th>
+                                <th>Игрок 2</th>
+                                <th>Дата</th>
+                                <th>Ходы</th>
+                                <th>Повтор</th>
+                            </tr>
                         </thead>
                         <tbody></tbody>
                     </table>
@@ -85,6 +135,7 @@
     </div>
 </div>
 
+<!-- ============================ Игровой экран ========================== -->
 <div id="screen-game" class="screen">
     <div class="game-layout">
         <div class="game-left">
@@ -105,11 +156,13 @@
         <div class="game-side">
             <button id="btnGrab" class="big-btn btn-grab">Грести</button>
             <button id="btnMove" class="big-btn btn-move">Отбой / передать ход</button>
+            <button id="btnResign" class="btn-ghost side-ghost btn-resign">Сдаться</button>
             <button id="btnLeave" class="btn-ghost side-ghost">Выйти в меню</button>
         </div>
     </div>
 </div>
 
+<!-- ============================== Повторы ============================== -->
 <div id="screen-replay" class="screen">
     <div class="game-layout">
         <div class="game-left">
@@ -131,6 +184,7 @@
     </div>
 </div>
 
+<!-- ============================== Модалка ============================== -->
 <div id="modal" class="modal hidden">
     <div class="modal-box">
         <h3 id="modalTitle">Приглашение в игру</h3>
@@ -146,11 +200,24 @@
     </div>
 </div>
 
-<script src="js/audio.js?v=3"></script>
+<div id="loadingOverlay" class="loading-overlay hidden">
+    <div class="loading-box">
+        <div class="spinner"></div>
+        <div id="loadingText">Загрузка…</div>
+    </div>
+</div>
+
+<div id="toastWrap" class="toast-wrap"></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/realtime.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/cards.js"></script>
 <script src="js/engine.js"></script>
-<script src="js/bot.js"></script>
+<script src="js/state.js"></script>
 <script src="js/render.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/lobby.js"></script>
 <script src="js/game.js"></script>
 <script src="js/replay.js"></script>

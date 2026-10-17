@@ -304,6 +304,229 @@ canvas {
 .modal-box p { margin: 0 0 10px; font-size: 15px; color: #333; }
 .modal-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 14px; }
 
+/* ------------------------------- Login -------------------------------- */
+
+#screen-login {
+    min-height: 100vh;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 20%, #233a23 0, #14171c 60%);
+    padding: 18px;
+}
+#screen-login.active { display: flex; }
+
+.login-window {
+    width: 420px;
+    max-width: 100%;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 16px 50px rgba(0,0,0,.55);
+    padding: 30px 28px 26px;
+    text-align: center;
+}
+.login-logo {
+    font-size: 44px;
+    font-weight: 800;
+    letter-spacing: 10px;
+    color: #191970;
+    line-height: 1;
+}
+.login-sub {
+    margin: 8px 0 26px;
+    color: #666;
+    font-size: 14px;
+    letter-spacing: 1px;
+}
+.google-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #fff;
+    color: #222;
+    border: 1px solid #c6c9d0;
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+}
+.google-btn:hover:not(:disabled) { background: #f4f7ff; }
+.google-btn:disabled { opacity: .5; cursor: default; }
+.google-g {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: conic-gradient(#ea4335 0 25%, #fbbc05 0 50%, #34a853 0 75%, #4285f4 0);
+    color: #fff;
+    font-weight: 800;
+    font-size: 14px;
+    line-height: 24px;
+}
+.dev-login {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid #e3e5ea;
+    text-align: left;
+}
+.dev-title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 8px; }
+.token-form { display: flex; gap: 8px; }
+.token-form input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #b9bdc6;
+    border-radius: 4px;
+    font-size: 14px;
+}
+.dev-hint { margin-top: 8px; font-size: 12px; color: #888; line-height: 1.45; }
+.dev-hint code { background: #f1f3f7; padding: 1px 4px; border-radius: 3px; }
+.login-note { min-height: 20px; margin: 16px 0 0; color: #b3261e; font-size: 14px; }
+
+/* ---------------------------- Menu topbar ----------------------------- */
+
+.menu-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #191970;
+    color: #fff;
+}
+.menu-topbar-right { display: flex; align-items: center; gap: 10px; }
+.user-chip { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.user-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #2e3a8c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex: 0 0 auto;
+}
+.user-text { display: flex; flex-direction: column; min-width: 0; }
+.user-name {
+    font-weight: 700;
+    font-size: 15px;
+    max-width: 230px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.user-id { font-size: 12px; opacity: .7; }
+.conn-status {
+    font-size: 12px;
+    padding: 3px 9px;
+    border-radius: 10px;
+    background: #5c5c66;
+    color: #fff;
+    white-space: nowrap;
+}
+.conn-status[data-status="open"] { background: #2e7d32; }
+.conn-status[data-status="connecting"],
+.conn-status[data-status="reconnecting"] { background: #b26a00; }
+
+.find-hint { color: #888; font-size: 13px; align-self: center; }
+
+.status-badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.status-in_lobby { background: #e3f4e5; color: #1b5e20; }
+.status-in_game { background: #fff0d6; color: #8a5300; }
+.status-away { background: #eceff3; color: #5b6470; }
+.status-unknown { background: #eceff3; color: #5b6470; }
+
+.invite-btn:disabled,
+.watch-btn:disabled {
+    opacity: .45;
+    cursor: default;
+    filter: none;
+}
+
+.btn-resign { color: #9b1c1c; border-color: #d9a5a5; background: #fdeeee; }
+.btn-resign:hover { background: #f9dede; }
+
+button:disabled { cursor: default; }
+
+/* ------------------------------ Toasts -------------------------------- */
+
+.toast-wrap {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 80;
+    max-width: 360px;
+}
+.toast {
+    background: #2b303b;
+    color: #fff;
+    padding: 11px 14px;
+    border-radius: 5px;
+    font-size: 14px;
+    line-height: 1.35;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    border-left: 4px solid #4169e1;
+    cursor: pointer;
+    animation: toast-in .18s ease-out;
+}
+.toast-error { border-left-color: #d32f2f; }
+.toast-info { border-left-color: #4169e1; }
+.toast-out { opacity: 0; transform: translateY(6px); transition: all .25s ease; }
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ------------------------------ Loading ------------------------------- */
+
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 90;
+}
+.loading-box {
+    background: #fff;
+    border-radius: 8px;
+    padding: 24px 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    font-size: 15px;
+    color: #333;
+    box-shadow: 0 12px 40px rgba(0,0,0,.5);
+}
+.spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #dfe2e8;
+    border-top-color: #4169e1;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ------------------------------ Replay -------------------------------- */
+
+#replayPlayers { font-size: 15px; font-weight: 600; }
+
 @media (max-width: 1080px) {
     .game-layout { flex-direction: column; align-items: center; }
     .game-side { width: 800px; max-width: 100%; flex-direction: row; flex-wrap: wrap; padding-top: 0; }

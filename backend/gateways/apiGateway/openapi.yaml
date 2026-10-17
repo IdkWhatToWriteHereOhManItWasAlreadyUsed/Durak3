@@ -450,7 +450,7 @@ paths:
           description: Партия
           content:
             application/json:
-              schema: { $ref: './game-service.yaml#/components/schemas/Game' }
+              schema: { $ref: '#/components/schemas/Game' }
         '404':
           $ref: '#/components/responses/Error'
 
@@ -472,7 +472,7 @@ paths:
           description: Состояние
           content:
             application/json:
-              schema: { $ref: './game-service.yaml#/components/schemas/GameState' }
+              schema: { $ref: '#/components/schemas/GameStatee' }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -501,7 +501,7 @@ paths:
                 type:
                   type: string
                   enum: [CARD, MOVE, GRAB, WIN]
-                card: { $ref: './game-service.yaml#/components/schemas/Card' }
+                card: { $ref: '#/components/schemas/Card' }
                 stack: { type: integer, minimum: 0, maximum: 3 }
                 clientMoveId: { type: string }
       responses:
@@ -537,7 +537,7 @@ paths:
                   total: { type: integer }
                   items:
                     type: array
-                    items: { $ref: './game-service.yaml#/components/schemas/AppliedMove' }
+                    items: { $ref: '#/components/schemas/AppliedMove' }
         '404':
           $ref: '#/components/responses/Error'
 
@@ -557,7 +557,7 @@ paths:
           description: Партия завершена
           content:
             application/json:
-              schema: { $ref: './game-service.yaml#/components/schemas/Game' }
+              schema: { $ref: '#/components/schemas/Game' }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -576,7 +576,7 @@ paths:
           description: Результат
           content:
             application/json:
-              schema: { $ref: './game-service.yaml#/components/schemas/GameResult' }
+              schema: { $ref: '.#/components/schemas/GameResult' }
         '404':
           $ref: '#/components/responses/Error'
 
@@ -603,7 +603,7 @@ paths:
           description: Повторы
           content:
             application/json:
-              schema: { $ref: './replay-service.yaml#/components/schemas/ReplayList' }
+              schema: { $ref: '#/components/schemas/ReplayList' }
 
   /api/replays/{replayId}:
     get:
@@ -618,7 +618,7 @@ paths:
           description: Повтор
           content:
             application/json:
-              schema: { $ref: './replay-service.yaml#/components/schemas/Replay' }
+              schema: { $ref: '#/components/schemas/Replay' }
         '404':
           $ref: '#/components/responses/Error'
 
@@ -649,7 +649,7 @@ paths:
                   total: { type: integer }
                   frames:
                     type: array
-                    items: { $ref: './replay-service.yaml#/components/schemas/ReplayFrame' }
+                    items: { $ref: '#/components/schemas/ReplayFrame' }
         '404':
           $ref: '#/components/responses/Error'
 

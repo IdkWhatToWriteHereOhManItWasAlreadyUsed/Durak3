@@ -1,122 +1,275 @@
+/**
+ * Игровой экран.
+ *
+ * Партия полностью авторитетна на сервере (game-service):
+ *   GET  /api/games/{gameId}/state
+ *   POST /api/games/{gameId}/moves  { type: CARD|MOVE|GRAB|WIN, card?, stack? }
+ *   POST /api/games/{gameId}/resign
+ *   GET  /api/games/{gameId}/result
+ *
+ * Клиент только готовит ход, проверяет его для UX и отправляет на сервер.
+ * Обновления приходят по WebSocket (`game.state`, `game.finished`), а
+ * polling остаётся страховкой при разрыве соединения.
+ */
 const Game = (() => {
-    let session = null;
     let renderer = null;
     let canvas = null;
-    let names = { human: 'Вы', bot: 'Соперник' };
+
+    let state = null;
+    let session = null;
+    let gameId = null;
+    let myId = null;
+    let myName = 'Вы';
+    let opponentName = 'Соперник';
+
     let page = 0;
     let selected = -1;
     let cursor = null;
     let dragging = false;
     let busy = false;
     let finished = false;
-    let botPlan = [];
+    let active = false;
+
     let turnTimer = null;
     let turnSeconds = 0;
-    let record = null;
-    let gameGen = 0;
-
-    const BOT_DELAY = 750;
-    const TURN_LIMIT = 30;
+    let turnKey = '';
+    let pollTimer = null;
+    let pollInFlight = false;
+    let winSent = false;
+    let gen = 0;
 
     const el = {};
 
     function init() {
         canvas = document.getElementById('gameCanvas');
         renderer = new GameRenderer(canvas);
+
         el.info = document.getElementById('lblInfo');
         el.time = document.getElementById('moveTime');
         el.pageLabel = document.getElementById('pageLabel');
+        el.grab = document.getElementById('btnGrab');
+        el.move = document.getElementById('btnMove');
+        el.resign = document.getElementById('btnResign');
 
         canvas.addEventListener('pointerdown', onPointerDown);
         canvas.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
-        canvas.addEventListener('pointerleave', () => { if (dragging) { dragging = false; refresh(); } });
+        canvas.addEventListener('pointerleave', () => {
+            if (dragging) { dragging = false; refresh(); }
+        });
 
-        document.getElementById('btnGrab').addEventListener('click', onGrab);
-        document.getElementById('btnMove').addEventListener('click', onMoveTransfer);
+        el.grab.addEventListener('click', onGrab);
+        el.move.addEventListener('click', onMoveTransfer);
+        if (el.resign) el.resign.addEventListener('click', onResign);
         document.getElementById('btnDecPage').addEventListener('click', () => switchPage(-1));
         document.getElementById('btnIncPage').addEventListener('click', () => switchPage(1));
-        document.getElementById('btnLeave').addEventListener('click', () => {
-            stopTimers();
-            App.showScreen('menu');
+        document.getElementById('btnLeave').addEventListener('click', onLeave);
+
+        Realtime.on('game.state', onRealtimeState);
+        Realtime.on('game.finished', onRealtimeFinished);
+        Realtime.on('connected', () => {
+            if (active && !finished) loadState(false);
         });
     }
 
-    function start(opts) {
-        CardAssets.whenReady(() => {
-            gameGen++;
-            session = new GameSession();
-            names.human = opts.playerName || 'Вы';
-            names.bot = opts.opponentName || 'Соперник';
-            page = 0;
-            selected = -1;
-            cursor = null;
-            dragging = false;
-            busy = false;
-            finished = false;
-            botPlan = [];
+    /* ----------------------------- lifecycle ------------------------------ */
 
-            if (opts.startFirst === false) {
-                session.CurrPlayerMove = 1;
-                session.CurrPlayerAttacker = 1;
-            } else {
-                session.CurrPlayerMove = 0;
-                session.CurrPlayerAttacker = 0;
+    function start(opts = {}) {
+        if (!opts.gameId) {
+            App.toast('Не передан gameId', 'error');
+            App.goMenu();
+            return;
+        }
+
+        const myGen = ++gen;
+        gameId = opts.gameId;
+        myId = opts.myId != null ? opts.myId : Auth.id();
+        myName = (Auth.user() && Auth.user().username) || 'Вы';
+        opponentName = opts.opponentName || 'Соперник';
+
+        page = 0;
+        selected = -1;
+        cursor = null;
+        dragging = false;
+        busy = false;
+        finished = false;
+        active = true;
+        winSent = false;
+        turnKey = '';
+        state = null;
+        session = null;
+
+        stopTurnTimer();
+        stopPolling();
+        setStatus('Загрузка партии…');
+        if (el.time) el.time.textContent = '';
+        if (el.grab) el.grab.disabled = true;
+        if (el.move) el.move.disabled = true;
+        if (el.resign) el.resign.disabled = true;
+        if (el.pageLabel) el.pageLabel.textContent = '1 / 1';
+
+        CardAssets.whenReady(async () => {
+            if (myGen !== gen || !active) return;
+            await loadState(true);
+            startPolling();
+        });
+    }
+
+    function stop() {
+        gen++;
+        active = false;
+        finished = true;
+        busy = true;
+        stopTurnTimer();
+        stopPolling();
+        if (el.time) el.time.textContent = '';
+    }
+
+    function isActive() {
+        return active;
+    }
+
+    function currentGameId() {
+        return gameId;
+    }
+
+    /* ------------------------------ state --------------------------------- */
+
+    async function loadState(showErrors) {
+        if (!active || pollInFlight || !gameId) return;
+        pollInFlight = true;
+        try {
+            const data = await Api.games.state(gameId);
+            if (active) applyState(data);
+        } catch (e) {
+            if (!active) return;
+            if (e.status === 404 || e.status === 403) {
+                App.toast(e.status === 403 ? 'Нет доступа к партии' : 'Партия не найдена', 'error');
+                App.goMenu();
+            } else if (showErrors && e.status !== 401) {
+                setStatus('Не удалось получить состояние: ' + e.message);
             }
+        } finally {
+            pollInFlight = false;
+        }
+    }
 
-            record = {
-                p0: names.human,
-                p1: names.bot,
-                states: [snapshot(session)],
-                labels: ['Начало партии'],
-                date: Date.now(),
-            };
+    function applyState(next) {
+        if (!active || !next) return;
+        if (next.gameId && gameId && next.gameId !== gameId) return;
 
-            setStatus(session.CurrPlayerMove === 0 ? 'Ваш ход' : 'Ход соперника');
+        state = next;
+        resolveNames(state);
+        session = new ServerSession(state, myId);
+
+        if (state.status === 'finished') {
             refresh();
-            tick();
-        });
+            finishGame(null);
+            return;
+        }
+
+        if (state.players && state.players.length) {
+            const opponent = state.players.find(p => p.id !== myId);
+            if (opponent && opponent.name) opponentName = opponent.name;
+        }
+
+        const maxPage = Math.max(0, Math.ceil(session.PlayerCards[0].length / 9) - 1);
+        page = Math.min(page, maxPage);
+
+        refresh();
+        updateStatus();
+        syncTurnTimer();
+        maybeConfirmWin();
     }
 
-    function snapshot(s) {
-        return JSON.parse(JSON.stringify({
-            PlayerCards: s.PlayerCards,
-            Deck: s.Deck,
-            GameStack: s.GameStack,
-            Trump: s.Trump,
-            CurrPlayerMove: s.CurrPlayerMove,
-            CurrPlayerAttacker: s.CurrPlayerAttacker,
-        }));
+    function resolveNames(data) {
+        const players = Array.isArray(data.players) ? data.players : [];
+        const me = players.find(p => p.id === myId);
+        if (me && me.name) myName = me.name;
+        const opponent = players.find(p => p.id !== myId);
+        if (opponent && opponent.name) opponentName = opponent.name;
     }
 
-    function pushState(label) {
-        record.states.push(snapshot(session));
-        record.labels.push(label);
+    function updateStatus() {
+        if (!state) return;
+
+        if (state.status === 'waiting') {
+            setStatus('Ожидание соперника…');
+            return;
+        }
+        if (!myTurn()) {
+            setStatus('Ход соперника' + (opponentName ? ' (' + opponentName + ')' : '') + '…');
+            return;
+        }
+        if (session.isAttackerTurn()) {
+            setStatus(session.allStacksEmpty()
+                ? 'Ваш ход: положите карту'
+                : 'Ваш ход: подкиньте карту или передайте ход');
+        } else if (session.allCardsBeaten()) {
+            setStatus('Отбились! Нажмите «Отбой / передать ход»');
+        } else {
+            setStatus('Отбивайтесь или забирайте карты');
+        }
     }
 
-    function setStatus(text) { el.info.textContent = text; }
+    function maybeConfirmWin() {
+        if (winSent || !state || state.status !== 'active') return;
+
+        const handEmpty = !state.yourHand || state.yourHand.length === 0;
+        const tableEmpty = !state.table || state.table.every(stack => !stack || stack.length === 0);
+        if (!handEmpty || !tableEmpty || (state.deckSize || 0) > 0) return;
+
+        winSent = true;
+        Api.games.move(gameId, { type: 'WIN' })
+            .then(data => { if (active) applyState(data); })
+            .catch(() => { /* сервер сам завершит партию */ });
+    }
+
+    /* ------------------------------ render -------------------------------- */
 
     function refresh() {
         if (!session) return;
+
         const maxPage = Math.max(0, Math.ceil(session.PlayerCards[0].length / 9) - 1);
         if (page > maxPage) page = maxPage;
+
         renderer.draw(session, { selectedCard: selected, cursor, page });
-        el.pageLabel.textContent = `${page + 1} / ${maxPage + 1}`;
-        document.getElementById('btnDecPage').disabled = page <= 0;
-        document.getElementById('btnIncPage').disabled = page >= maxPage;
+
+        if (el.pageLabel) el.pageLabel.textContent = `${page + 1} / ${maxPage + 1}`;
+        const prev = document.getElementById('btnDecPage');
+        const next = document.getElementById('btnIncPage');
+        if (prev) prev.disabled = page <= 0;
+        if (next) next.disabled = page >= maxPage;
+
+        const canAct = myTurn() && !busy && !finished;
+        if (el.grab) el.grab.disabled = !canAct;
+        if (el.move) el.move.disabled = !canAct;
+        if (el.resign) el.resign.disabled = !active || finished;
     }
 
-    function toField(e) {
+    function myTurn() {
+        return !!state && active && !finished &&
+            state.status === 'active' &&
+            state.currentPlayerId === myId;
+    }
+
+    function setStatus(text) {
+        if (el.info) el.info.textContent = text;
+    }
+
+    /* ------------------------------ pointer ------------------------------- */
+
+    function toField(event) {
         const rect = canvas.getBoundingClientRect();
         return {
-            x: (e.clientX - rect.left) * (canvas.width / rect.width),
-            y: (e.clientY - rect.top) * (canvas.height / rect.height),
+            x: (event.clientX - rect.left) * (canvas.width / rect.width),
+            y: (event.clientY - rect.top) * (canvas.height / rect.height),
         };
     }
 
-    function stackX(i) {
+    function stackX(index) {
         const { W, CARD_W, DIST } = FIELD;
-        switch (i) {
+        switch (index) {
             case 0: return W / 2 - CARD_W * 2 - DIST;
             case 1: return W / 2 - CARD_W;
             case 2: return W / 2 + DIST;
@@ -125,13 +278,15 @@ const Game = (() => {
     }
 
     function getSelectedCard(x, y) {
+        if (!session) return -1;
         const { H, CARD_W, CARD_H, DIST } = FIELD;
         if (y > H - DIST || y < H - DIST - CARD_H) return -1;
         for (let i = 0; i < 9; i++) {
             const left = DIST * (i + 1) + CARD_W * i;
             const right = DIST * (i + 1) + CARD_W * (i + 1);
-            if (x > left && x < right && session.PlayerCards[0].length > i)
+            if (x > left && x < right && session.PlayerCards[0].length > i) {
                 return i + 9 * page;
+            }
         }
         return -1;
     }
@@ -146,226 +301,214 @@ const Game = (() => {
         return -1;
     }
 
-    function onPointerDown(e) {
+    function onPointerDown(event) {
         if (busy || finished || !session) return;
-        if (session.CurrPlayerMove !== 0) { setStatus('Сейчас не Ваш ход!'); return; }
-        const p = toField(e);
-        selected = getSelectedCard(p.x, p.y);
+        if (!myTurn()) {
+            setStatus('Сейчас не Ваш ход!');
+            return;
+        }
+        const point = toField(event);
+        selected = getSelectedCard(point.x, point.y);
         if (selected !== -1) {
-            cursor = p;
+            cursor = point;
             dragging = true;
-            canvas.setPointerCapture?.(e.pointerId);
+            canvas.setPointerCapture && canvas.setPointerCapture(event.pointerId);
             refresh();
         } else {
             setStatus('Карта не выбрана');
         }
     }
 
-    function onPointerMove(e) {
-        if (!dragging || busy || finished) return;
-        if (session.CurrPlayerMove !== 0) return;
-        cursor = toField(e);
+    function onPointerMove(event) {
+        if (!dragging || busy || finished || !myTurn()) return;
+        cursor = toField(event);
         refresh();
     }
 
-    function onPointerUp(e) {
-        if (!dragging || busy || finished || !session) { dragging = false; return; }
-        dragging = false;
-        if (session.CurrPlayerMove !== 0) {
-            setStatus('Сейчас не Ваш ход!');
-            selected = -1; cursor = null; refresh();
+    function onPointerUp(event) {
+        if (!dragging || busy || finished || !session) {
+            dragging = false;
             return;
         }
-        const p = toField(e);
-        const stackNum = getSelectedStack(p.x, p.y);
+        dragging = false;
 
-        if (selected === -1) { selected = -1; cursor = null; refresh(); return; }
+        if (!myTurn()) {
+            setStatus('Сейчас не Ваш ход!');
+            resetSelection();
+            return;
+        }
 
+        const point = toField(event);
+        const stackNum = getSelectedStack(point.x, point.y);
+
+        if (selected === -1) {
+            resetSelection();
+            return;
+        }
         if (stackNum === -1) {
             setStatus('Положите карту в нормальное место!');
-            selected = -1; cursor = null; refresh();
+            resetSelection();
             return;
         }
 
         const card = session.PlayerCards[0][selected];
+        if (!card) {
+            resetSelection();
+            return;
+        }
 
         if (session.isAttackerTurn()) {
             if (session.canPush(card, session.GameStack[stackNum])) {
-                doHumanMove(card, stackNum, 'Вы положили ' + cardName(card));
+                resetSelection();
+                sendMove({ type: 'CARD', card, stack: stackNum },
+                    'Вы положили ' + cardName(card));
             } else {
                 setStatus('Эту карту сюда положить нельзя!');
-                selected = -1; cursor = null; refresh();
+                resetSelection();
             }
         } else {
             const stack = session.GameStack[stackNum];
-            if (stack.length % 2 === 1 && session.canBeat(card, stack[stack.length - 1])) {
-                doHumanMove(card, stackNum, 'Вы отбились ' + cardName(card));
+            const top = stack[stack.length - 1];
+            if (stack.length % 2 === 1 && session.canBeat(card, top)) {
+                resetSelection();
+                sendMove({ type: 'CARD', card, stack: stackNum },
+                    'Вы отбились ' + cardName(card));
             } else if (stack.length % 2 === 0) {
                 setStatus('Здесь нет карты, которую можно отбить!');
-                selected = -1; cursor = null; refresh();
+                resetSelection();
             } else {
                 setStatus('Вы не можете побить эту карту!');
-                selected = -1; cursor = null; refresh();
+                resetSelection();
             }
         }
     }
 
-    function doHumanMove(card, stackNum, label) {
-        session.doMove(card, stackNum);
-        pushState(label);
+    function resetSelection() {
         selected = -1;
         cursor = null;
-        checkCardsPage();
         refresh();
-        afterAction();
+    }
+
+    /* ------------------------------- moves -------------------------------- */
+
+    async function sendMove(move, message) {
+        if (busy || finished || !active) return;
+
+        busy = true;
+        setStatus(message);
+        refresh();
+
+        try {
+            const data = await Api.games.move(gameId, move);
+            if (active) applyState(data);
+        } catch (e) {
+            if (!active) return;
+            if (e.status === 409) {
+                setStatus(e.message || 'Ход отклонён сервером');
+            } else if (e.status !== 401) {
+                setStatus('Ошибка хода: ' + e.message);
+            }
+            await loadState(false);
+        } finally {
+            busy = false;
+            if (active && !finished) refresh();
+        }
     }
 
     function onMoveTransfer() {
         if (busy || finished || !session) return;
-        if (session.CurrPlayerMove !== 0) { setStatus('Сейчас не ваш ход!'); return; }
+        if (!myTurn()) {
+            setStatus('Сейчас не ваш ход!');
+            return;
+        }
 
         if (session.isAttackerTurn()) {
-            if (session.allStacksEmpty()) { setStatus('Вы не положили ни одной карты'); return; }
-            setStatus('Вы передали ход сопернику!');
-            session.transferMove(MoveType.mtTransfer);
-            pushState('Вы передали ход');
+            if (session.allStacksEmpty()) {
+                setStatus('Вы не положили ни одной карты');
+                return;
+            }
+            sendMove({ type: 'MOVE' }, 'Вы передали ход сопернику!');
         } else {
-            if (!session.allCardsBeaten()) { setStatus('Не все карты отбиты!'); return; }
-            setStatus('Атакуйте!');
-            session.giveCardsAfterDefense();
-            session.transferMove(MoveType.mtTransfer);
-            pushState('Вы отбились');
+            if (!session.allCardsBeaten()) {
+                setStatus('Не все карты отбиты!');
+                return;
+            }
+            sendMove({ type: 'MOVE' }, 'Вы отбились');
         }
-        selected = -1; cursor = null;
-        checkCardsPage();
-        refresh();
-        afterAction();
     }
 
     function onGrab() {
         if (busy || finished || !session) return;
-        if (session.isAttackerTurn() || session.CurrPlayerMove !== 0) {
+        if (!myTurn() || session.isAttackerTurn()) {
             setStatus('Сейчас не время таким заниматься!');
             return;
         }
-        session.grab();
-        session.giveCardsAfterDefense();
-        session.transferMove(MoveType.mtGrab);
-        pushState('Вы забрали карты');
-        selected = -1; cursor = null;
-        checkCardsPage();
-        refresh();
-        afterAction();
+        sendMove({ type: 'GRAB' }, 'Вы забрали карты');
     }
 
-    function switchPage(dir) {
-        const maxPage = Math.max(0, Math.ceil(session.PlayerCards[0].length / 9) - 1);
-        const next = page + dir;
-        if (next < 0 || next > maxPage) return;
-        page = next;
-        selected = -1; cursor = null;
-        refresh();
+    async function onResign() {
+        if (!active || finished) return;
+
+        App.showModal({
+            owner: 'game',
+            title: 'Сдаться?',
+            text: 'Партия будет завершена, а победа достанется сопернику.',
+            yesText: 'Сдаться',
+            noText: 'Продолжить',
+            onYes: async () => {
+                try {
+                    await Api.games.resign(gameId);
+                    await finishGame(null);
+                } catch (e) {
+                    if (e.status !== 401) App.toast('Не удалось сдаться: ' + e.message, 'error');
+                }
+            },
+        });
     }
 
-    function checkCardsPage() {
-        page = Math.max(0, Math.ceil(session.PlayerCards[0].length / 9) - 1);
-    }
-
-    function afterAction() { tick(); }
-
-    function checkGameOver() {
-        if (session.Deck.length > 0) return false;
-        if (!session.allStacksEmpty()) return false;
-        return session.PlayerCards[0].length === 0 || session.PlayerCards[1].length === 0;
-    }
-
-    function tick() {
-        if (finished) return;
-        if (checkGameOver()) { finishGame(); return; }
-
-        if (session.CurrPlayerMove === 1) {
-            stopTurnTimer();
-            busy = true;
-            setStatus('Ход соперника...');
-            scheduleBot();
-        } else {
-            busy = false;
-            if (session.isAttackerTurn()) setStatus('Ваш ход: положите карту или передайте ход');
-            else if (session.allCardsBeaten()) setStatus('Отбились! Нажмите «Отбой / передать ход»');
-            else setStatus('Отбивайтесь или забирайте карты');
-            startTurnTimer();
+    function onLeave() {
+        if (!active) {
+            App.goMenu();
+            return;
         }
-    }
-
-    function scheduleBot() {
-        const gen = gameGen;
-        setTimeout(() => { if (gen === gameGen && !finished) botStep(); }, BOT_DELAY);
-    }
-
-    function botStep() {
-        if (finished) return;
-        if (checkGameOver()) { finishGame(); return; }
-
-        if (botPlan.length > 0) {
-            const step = botPlan.shift();
-            if (session.PlayerCards[1].indexOf(step.card) !== -1) {
-                session.doMove(step.card, step.stackNum);
-                pushState('Соперник отбился ' + cardName(step.card));
-            }
-            refresh();
-            if (botPlan.length > 0) { scheduleBot(); return; }
-            botPass();
+        if (finished) {
+            App.goMenu();
             return;
         }
 
-        const action = DurakBot.decide(session, 1);
-        if (!action) { tick(); return; }
-
-        switch (action.kind) {
-            case 'move':
-                if (session.PlayerCards[1].indexOf(action.card) !== -1) {
-                    session.doMove(action.card, action.stackNum);
-                    pushState('Соперник положил ' + cardName(action.card));
-                }
-                refresh();
-                tick();
-                break;
-            case 'plan':
-                botPlan = action.steps.slice();
-                botStep();
-                break;
-            case 'grab':
-                session.grab();
-                session.giveCardsAfterDefense();
-                session.transferMove(MoveType.mtGrab);
-                pushState('Соперник забрал карты');
-                refresh();
-                tick();
-                break;
-            case 'pass':
-                botPass();
-                break;
-            default:
-                tick();
-        }
+        App.showModal({
+            owner: 'game',
+            title: 'Выйти в меню?',
+            text: 'Партия останется активной — к ней можно будет вернуться.',
+            yesText: 'Выйти',
+            noText: 'Остаться',
+            onYes: () => App.goMenu(),
+        });
     }
 
-    function botPass() {
-        if (session.isAttackerTurn()) {
-            session.transferMove(MoveType.mtTransfer);
-            pushState('Соперник передал ход');
-        } else {
-            session.giveCardsAfterDefense();
-            session.transferMove(MoveType.mtTransfer);
-            pushState('Соперник отбился');
+    /* ------------------------------- timer -------------------------------- */
+
+    function syncTurnTimer() {
+        const key = state
+            ? `${state.status}:${state.currentPlayerId}:${state.movesCount}`
+            : '';
+
+        if (key !== turnKey) {
+            turnKey = key;
+            if (myTurn()) startTurnTimer();
+            else stopTurnTimer();
+            return;
         }
-        refresh();
-        tick();
+        if (myTurn()) {
+            if (!turnTimer) startTurnTimer();
+        } else {
+            stopTurnTimer();
+        }
     }
 
     function startTurnTimer() {
         stopTurnTimer();
-        turnSeconds = TURN_LIMIT;
+        turnSeconds = CONFIG.turnLimitSeconds;
         updateTimerLabel();
         turnTimer = setInterval(() => {
             turnSeconds--;
@@ -378,60 +521,154 @@ const Game = (() => {
     }
 
     function stopTurnTimer() {
-        if (turnTimer) clearInterval(turnTimer);
+        clearInterval(turnTimer);
         turnTimer = null;
+        if (el.time) el.time.textContent = '';
     }
 
-    function stopTimers() { stopTurnTimer(); finished = true; gameGen++; }
-
     function updateTimerLabel() {
-        el.time.textContent = (session && session.CurrPlayerMove === 0 && !finished)
-            ? '⏱ ' + turnSeconds + ' c' : '';
+        if (!el.time) return;
+        el.time.textContent = myTurn() && !finished ? '⏱ ' + turnSeconds + ' c' : '';
     }
 
     function onTurnTimeout() {
-        if (finished || busy) return;
-        if (session.CurrPlayerMove !== 0) return;
+        if (finished || busy || !myTurn()) return;
+
         setStatus('Время на ход истекло!');
         if (session.isAttackerTurn()) {
             if (session.allStacksEmpty()) {
-                const hand = session.PlayerCards[0];
-                const card = [...hand].sort((a, b) => a.power - b.power)[0];
+                const card = session.PlayerCards[0]
+                    .filter(Boolean)
+                    .sort((a, b) => a.power - b.power)[0];
                 if (card) {
-                    session.doMove(card, 0);
-                    pushState('Время вышло: авто-ход');
-                    refresh();
-                    afterAction();
+                    sendMove({ type: 'CARD', card, stack: 0 }, 'Время вышло: авто-ход');
                     return;
                 }
             }
-            onMoveTransfer();
+            sendMove({ type: 'MOVE' }, 'Время вышло: передача хода');
         } else {
-            onGrab();
+            sendMove({ type: 'GRAB' }, 'Время вышло: забираем карты');
         }
     }
 
-    function finishGame() {
-        if (finished) return;
+    /* ------------------------------ polling ------------------------------- */
+
+    function startPolling() {
+        stopPolling();
+        pollTimer = setInterval(() => {
+            if (!active || finished || document.hidden) return;
+            loadState(false);
+        }, CONFIG.gamePollMs);
+    }
+
+    function stopPolling() {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+
+    /* --------------------------- realtime events -------------------------- */
+
+    function onRealtimeState(payload) {
+        if (!active || finished) return;
+        const data = payload && (payload.state || payload);
+        if (!data) return;
+        if (data.gameId && gameId && data.gameId !== gameId) return;
+
+        if (data.yourHand !== undefined || data.table !== undefined || data.currentPlayerId !== undefined) {
+            applyState(data);
+        } else {
+            loadState(false);
+        }
+    }
+
+    function onRealtimeFinished(payload) {
+        if (!active || finished) return;
+        const result = payload && (payload.result || payload);
+        if (result && result.gameId && gameId && result.gameId !== gameId) return;
+        finishGame(result || null);
+    }
+
+    /* ----------------------------- game over ------------------------------ */
+
+    async function finishGame(result) {
+        if (finished || !active) return;
+
         finished = true;
         busy = true;
         stopTurnTimer();
-        el.time.textContent = '';
+        stopPolling();
+        const myGen = gen;
 
-        const humanWon = session.PlayerCards[0].length === 0;
-        record.result = humanWon ? 'win' : 'lose';
-        saveReplay(record);
+        let res = result;
+        if (!res || res.winnerId === undefined) {
+            try {
+                res = await Api.games.result(gameId);
+            } catch (e) {
+                res = res || null;
+            }
+        }
+        if (myGen !== gen || !active) return;
 
-        if (humanWon) animateVictory();
-        else animateDefeat();
+        const won = res && res.winnerId != null
+            ? res.winnerId === myId
+            : !!(session && session.PlayerCards[0].length === 0);
+        const draw = !won && res && res.winnerId == null && res.reason === 'draw';
+
+        if (draw) {
+            drawResultText('Ничья');
+            await sleep(1200);
+        } else if (won) {
+            await animateVictory();
+        } else {
+            await animateDefeat();
+        }
+
+        if (myGen !== gen || !active) return;
+        endScreen(draw ? null : won, res);
     }
 
-    function saveReplay(rec) {
-        try {
-            const all = JSON.parse(localStorage.getItem('durak_replays') || '[]');
-            all.unshift(rec);
-            localStorage.setItem('durak_replays', JSON.stringify(all.slice(0, 30)));
-        } catch (e) { }
+    function endScreen(won, result) {
+        const replayId = result && result.replayId;
+        const summary = {
+            id: replayId,
+            player1: myName,
+            player2: opponentName,
+        };
+
+        let title;
+        let text;
+        if (won === null) {
+            title = 'Ничья';
+            text = 'Партия завершена вничью.';
+        } else if (won) {
+            title = 'Победа!';
+            text = 'Вы выиграли партию.' + (replayId ? ' Повтор сохранён.' : '');
+        } else {
+            title = 'Поражение';
+            text = 'Вы проиграли. Дурак — ' + (myName || 'вы') + '.';
+        }
+
+        if (replayId) {
+            App.showModal({
+                owner: 'game',
+                title,
+                text,
+                yesText: 'Смотреть повтор',
+                noText: 'В меню',
+                onYes: () => App.openReplay(replayId, summary),
+                onNo: () => App.goMenu(),
+                onClose: () => App.goMenu(),
+            });
+        } else {
+            App.showModal({
+                owner: 'game',
+                title,
+                text,
+                showYes: false,
+                closeText: 'В меню',
+                onClose: () => App.goMenu(),
+            });
+        }
     }
 
     function drawResultText(text) {
@@ -453,41 +690,45 @@ const Game = (() => {
     async function animateVictory() {
         Sound.play('text');
         await sleep(700);
+        if (!active) return;
         drawResultText('You');
         await sleep(255);
         Sound.play('text');
         await sleep(500);
+        if (!active) return;
         drawResultText('You Win');
         await sleep(1777);
+        if (!active) return;
         await confetti(7);
-        endScreen(true);
     }
 
     async function animateDefeat() {
         const text = 'You Lose';
         drawResultText('');
         for (let i = 1; i <= text.length; i++) {
+            if (!active) return;
             if (text[i - 1] !== ' ') Sound.play('text');
             await sleep(200);
+            if (!active) return;
             drawResultText(text.substring(0, i));
         }
         await sleep(1800);
-        endScreen(false);
     }
 
     function confetti(seconds) {
         return new Promise(resolve => {
             const { ctx } = renderer;
             const { W, H } = FIELD;
-            const bg = document.createElement('canvas');
-            bg.width = W; bg.height = H;
-            bg.getContext('2d').drawImage(canvas, 0, 0);
+            const background = document.createElement('canvas');
+            background.width = W;
+            background.height = H;
+            background.getContext('2d').drawImage(canvas, 0, 0);
 
             const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff',
                 '#00ffff', '#ffa500', '#8a2be2', '#00008b', '#ffffff'];
             const pieces = [];
             const end = performance.now() + seconds * 1000;
-            try { Sound.play('win'); } catch (e) { }
+            try { Sound.play('win'); } catch (e) { /* ignore */ }
 
             function frame(now) {
                 for (let k = 0; k < 2; k++) {
@@ -505,46 +746,49 @@ const Game = (() => {
                         comp: 1,
                     });
                 }
-                for (const p of pieces) {
-                    p.t += 1.5;
-                    p.y += p.speed;
-                    p.x = p.ix + p.amp * Math.sin(p.t * p.freq);
-                    if (Math.floor(Math.random() * 6) === 2) p.comp = Math.random() * 0.8 + 0.2;
+                for (const piece of pieces) {
+                    piece.t += 1.5;
+                    piece.y += piece.speed;
+                    piece.x = piece.ix + piece.amp * Math.sin(piece.t * piece.freq);
+                    if (Math.floor(Math.random() * 6) === 2) piece.comp = Math.random() * 0.8 + 0.2;
                 }
 
-                ctx.drawImage(bg, 0, 0);
+                ctx.drawImage(background, 0, 0);
                 for (let i = pieces.length - 1; i >= 0; i--) {
-                    const p = pieces[i];
-                    if (p.y > H) { pieces.splice(i, 1); continue; }
-                    const hz = p.size / 2;
-                    const vt = (p.size / 2) * p.comp;
-                    ctx.fillStyle = p.color;
+                    const piece = pieces[i];
+                    if (piece.y > H) { pieces.splice(i, 1); continue; }
+                    const hz = piece.size / 2;
+                    const vt = (piece.size / 2) * piece.comp;
+                    ctx.fillStyle = piece.color;
                     ctx.beginPath();
-                    ctx.moveTo(p.x, p.y - vt);
-                    ctx.lineTo(p.x + hz, p.y);
-                    ctx.lineTo(p.x, p.y + vt);
-                    ctx.lineTo(p.x - hz, p.y);
+                    ctx.moveTo(piece.x, piece.y - vt);
+                    ctx.lineTo(piece.x + hz, piece.y);
+                    ctx.lineTo(piece.x, piece.y + vt);
+                    ctx.lineTo(piece.x - hz, piece.y);
                     ctx.closePath();
                     ctx.fill();
                 }
-                if (now < end) requestAnimationFrame(frame);
+                if (now < end && active) requestAnimationFrame(frame);
                 else resolve();
             }
             requestAnimationFrame(frame);
         });
     }
 
-    function endScreen(won) {
-        App.showModal({
-            title: won ? 'Победа!' : 'Поражение',
-            text: won ? 'Вы выиграли партию. Повтор сохранён.' : 'Вы проиграли. Повтор сохранён.',
-            showYes: false,
-            closeText: 'В меню',
-            onClose: () => App.showScreen('menu'),
-        });
+    function switchPage(direction) {
+        if (!session) return;
+        const maxPage = Math.max(0, Math.ceil(session.PlayerCards[0].length / 9) - 1);
+        const next = page + direction;
+        if (next < 0 || next > maxPage) return;
+        page = next;
+        selected = -1;
+        cursor = null;
+        refresh();
     }
 
-    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
 
-    return { init, start, stopTimers };
+    return { init, start, stop, isActive, currentGameId };
 })();

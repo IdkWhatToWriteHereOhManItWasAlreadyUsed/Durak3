@@ -2,11 +2,18 @@
 'use strict';
 
 const http = require('http');
+const net = require('net');
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = __dirname;
 const DEFAULT_PORT = 5500;
+
+// api-gateway и realtime-gateway по умолчанию слушают 8080/8081
+// (см. backend/gateways/*/config/app/config.json и nginx/nginx.conf).
+const API_TARGET = new URL(process.env.API_TARGET || 'http://localhost:8080');
+const WS_TARGET = new URL(process.env.WS_TARGET || 'http://localhost:8081');
+const WS_PATH = process.env.WS_PATH || '/ws';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -55,6 +62,11 @@ function handler(req, res) {
     pathname = '/';
   }
 
+  // Прокси API, чтобы фронтенд и гейтвей были на одном origin (без CORS).
+  if (pathname === '/api' || pathname.startsWith('/api/')) {
+    return proxyHttp(req, res);
+  }
+
   const resolved = path.resolve(ROOT, '.' + pathname);
   if (resolved !== ROOT && !resolved.startsWith(ROOT + path.sep)) {
     log(req, 403);
@@ -78,6 +90,69 @@ function handler(req, res) {
   });
 }
 
+function proxyHttp(req, res) {
+  const headers = { ...req.headers, host: API_TARGET.host };
+  const port = API_TARGET.port || (API_TARGET.protocol === 'https:' ? 443 : 80);
+
+  const proxyReq = http.request({
+    hostname: API_TARGET.hostname,
+    port,
+    method: req.method,
+    path: req.url,
+    headers,
+  }, proxyRes => {
+    res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+    proxyRes.pipe(res);
+    proxyRes.on('end', () => log(req, proxyRes.statusCode || 502));
+  });
+
+  proxyReq.on('error', err => {
+    if (!res.headersSent) {
+      res.writeHead(502, {
+        'Content-Type': 'application/json; charset=utf-8',
+        ...NO_CACHE,
+      });
+    }
+    res.end(JSON.stringify({
+      code: 'BAD_GATEWAY',
+      message: 'api-gateway недоступен: ' + err.message,
+    }));
+    log(req, 502);
+  });
+
+  req.pipe(proxyReq);
+}
+
+function proxyUpgrade(req, socket, head) {
+  let pathname;
+  try {
+    pathname = new URL(req.url, 'http://localhost').pathname;
+  } catch {
+    pathname = '';
+  }
+  if (pathname !== WS_PATH) {
+    socket.destroy();
+    return;
+  }
+
+  const port = WS_TARGET.port || (WS_TARGET.protocol === 'https:' ? 443 : 80);
+  const upstream = net.connect(port, WS_TARGET.hostname, () => {
+    const headers = { ...req.headers, host: WS_TARGET.host };
+    const lines = [`${req.method} ${req.url} HTTP/1.1`];
+    for (const [name, value] of Object.entries(headers)) {
+      if (Array.isArray(value)) lines.push(`${name}: ${value.join(', ')}`);
+      else if (value !== undefined) lines.push(`${name}: ${value}`);
+    }
+    upstream.write(lines.join('\r\n') + '\r\n\r\n');
+    if (head && head.length) upstream.write(head);
+    upstream.pipe(socket);
+    socket.pipe(upstream);
+  });
+
+  upstream.on('error', () => socket.destroy());
+  socket.on('error', () => upstream.destroy());
+}
+
 function log(req, status) {
   process.stdout.write(`${req.socket.remoteAddress} - "${req.method} ${req.url}" ${status}\n`);
 }
@@ -90,6 +165,7 @@ function main() {
 
   const port = parsePort();
   const server = http.createServer(handler);
+  server.on('upgrade', proxyUpgrade);
 
   server.on('error', (err) => {
     console.error(err.code === 'EADDRINUSE' ? `Порт ${port} уже занят` : err.message);
@@ -99,6 +175,8 @@ function main() {
   server.listen(port, () => {
     console.log('Дурак — веб-фронтенд');
     console.log(`  Раздаётся папка: ${ROOT}`);
+    console.log(`  API proxy:       /api/* -> ${API_TARGET.origin}`);
+    console.log(`  WS proxy:        ${WS_PATH}  -> ${WS_TARGET.origin}${WS_PATH}`);
     console.log(`  Открой в браузере: http://localhost:${port}/`);
     console.log('  Остановить: Ctrl+C');
   });
