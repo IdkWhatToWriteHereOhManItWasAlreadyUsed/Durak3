@@ -1,12 +1,16 @@
 openapi: 3.0.3
 info:
   title: Durak Lobby Service
-  version: 1.0.0
+  version: 1.1.0
   description: >
     Учёт присутствия игроков. Заменяет периодическую рассылку
     `SERVER:CLIENTS:...` из DurakSharpServer: клиент сам сообщает о себе
     (heartbeat), а список онлайн-игроков отдаётся по запросу и/или пушится
     по WebSocket через gateway.
+
+    Аутентификации внутри сервиса нет: доступен только изнутри домена.
+    `id` игрока приходит в запросе; для действий от имени игрока его
+    подставляет api-gateway из opaque-токена.
 servers:
   - url: http://localhost:8082
     description: Локальная разработка
@@ -21,9 +25,10 @@ paths:
       description: >
         Регистрирует сессию присутствия. Возвращает `sessionId`, который
         нужно периодически «пинговать» через /presence/{sessionId}/heartbeat.
+
+        `id` в теле — кто открывает присутствие; подставляется api-gateway
+        из токена (клиентское значение игнорируется).
       operationId: openPresence
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -37,8 +42,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Presence'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
 
     get:
       tags: [Presence]
@@ -49,6 +52,10 @@ paths:
         - name: excludeSelf
           in: query
           schema: { type: boolean, default: true }
+        - name: id
+          in: query
+          description: ID текущего игрока (для excludeSelf); подставляется гейтвеем из токена
+          schema: { type: integer }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
@@ -94,16 +101,16 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /presence/{playerId}/status:
+  /presence/{id}/status:
     get:
       tags: [Presence]
       summary: Статус конкретного игрока
       operationId: getStatus
       parameters:
-        - name: playerId
+        - name: id
           in: path
           required: true
-          schema: { type: string, format: uuid }
+          schema: { type: integer }
       responses:
         '200':
           description: Статус
@@ -115,12 +122,6 @@ paths:
           $ref: '#/components/responses/NotFound'
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
   parameters:
     SessionId:
       name: sessionId
@@ -129,11 +130,6 @@ components:
       schema: { type: string, format: uuid }
 
   responses:
-    Unauthorized:
-      description: Требуется аутентификация
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
     NotFound:
       description: Не найдено
       content:
@@ -143,7 +139,11 @@ components:
   schemas:
     PresenceOpenRequest:
       type: object
+      required: [id]
       properties:
+        id:
+          type: integer
+          description: ID игрока (заполняется гейтвеем из токена)
         status:
           type: string
           enum: [in_lobby, in_game, away]
@@ -151,10 +151,12 @@ components:
         clientVersion: { type: string, example: "1.0.0" }
     Presence:
       type: object
-      required: [sessionId, playerId, name, status, lastSeen]
+      required: [sessionId, id, name, status, lastSeen]
       properties:
         sessionId: { type: string, format: uuid }
-        playerId: { type: string, format: uuid }
+        id:
+          type: integer
+          description: ID игрока
         name: { type: string }
         status:
           type: string
@@ -163,9 +165,11 @@ components:
         expiresAt: { type: string, format: date-time }
     PresenceStatus:
       type: object
-      required: [playerId, online]
+      required: [id, online]
       properties:
-        playerId: { type: string, format: uuid }
+        id:
+          type: integer
+          description: ID игрока
         online: { type: boolean }
         status:
           type: string

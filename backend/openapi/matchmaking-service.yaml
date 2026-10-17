@@ -1,11 +1,15 @@
 openapi: 3.0.3
 info:
   title: Durak Matchmaking Service
-  version: 1.0.0
+  version: 1.1.0
   description: >
     Приглашения и создание матчей. Заменяет пересылку пакетов `GO?` / `GO!` /
     `NO!` и ожидание ответа с таймаутом из DurakSharpServer. При принятии
     приглашения создаётся матч и запрашивается партия в game-service.
+
+    Аутентификации внутри сервиса нет: доступен только изнутри домена.
+    `id` игрока приходит в запросе; для действий от имени игрока его
+    подставляет api-gateway из opaque-токена (клиентское значение игнорируется).
 servers:
   - url: http://localhost:8083
     description: Локальная разработка
@@ -18,9 +22,10 @@ paths:
     post:
       tags: [Invites]
       summary: Пригласить игрока (аналог `GO?`)
+      description: >
+        `fromId` — кто приглашает (заполняется гейтвеем из токена),
+        `toId` — кого приглашают.
       operationId: createInvite
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -44,10 +49,15 @@ paths:
     get:
       tags: [Invites]
       summary: Список приглашений игрока
+      description: >
+        `id` в query — чьи приглашения; подставляется api-gateway из токена.
       operationId: listInvites
-      security:
-        - bearerAuth: []
       parameters:
+        - name: id
+          in: query
+          required: true
+          description: ID игрока (заполняется гейтвеем из токена)
+          schema: { type: integer }
         - name: direction
           in: query
           schema: { type: string, enum: [incoming, outgoing, all], default: all }
@@ -93,11 +103,22 @@ paths:
       description: >
         Принимает приглашение, создаёт матч и партию. Игрок, отправивший
         приглашение, ходит первым (аналог `StartFirst = true`).
+
+        `id` в теле — кто принимает; подставляется api-gateway из токена.
       operationId: acceptInvite
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/InviteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: integer
+                  description: ID принимающего игрока (заполняется гейтвеем из токена)
       responses:
         '200':
           description: Матч создан
@@ -105,7 +126,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Match' }
         '409':
-          description: Приглашение уже обработано истекло
+          description: Приглашение уже обработано или истекло
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -116,11 +137,22 @@ paths:
     post:
       tags: [Invites]
       summary: Отклонить приглашение (аналог `NO!`)
+      description: >
+        `id` в теле — кто отклоняет; подставляется api-gateway из токена.
       operationId: declineInvite
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/InviteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: integer
+                  description: ID отклоняющего игрока (заполняется гейтвеем из токена)
       responses:
         '200':
           description: Приглашение отклонено
@@ -134,11 +166,22 @@ paths:
     post:
       tags: [Invites]
       summary: Отменить своё приглашение
+      description: >
+        `id` в теле — кто отменяет; подставляется api-gateway из токена.
       operationId: cancelInvite
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/InviteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: integer
+                  description: ID отменяющего игрока (заполняется гейтвеем из токена)
       responses:
         '200':
           description: Приглашение отменено
@@ -154,10 +197,15 @@ paths:
     get:
       tags: [Matches]
       summary: Список матчей игрока
+      description: >
+        `id` в query — чьи матчи; подставляется api-gateway из токена.
       operationId: listMatches
-      security:
-        - bearerAuth: []
       parameters:
+        - name: id
+          in: query
+          required: true
+          description: ID игрока (заполняется гейтвеем из токена)
+          schema: { type: integer }
         - name: status
           in: query
           schema: { type: string, enum: [active, finished, all], default: all }
@@ -191,12 +239,6 @@ paths:
           $ref: '#/components/responses/NotFound'
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
   parameters:
     InviteId:
       name: inviteId
@@ -229,9 +271,14 @@ components:
   schemas:
     CreateInviteRequest:
       type: object
-      required: [toPlayerId]
+      required: [fromId, toId]
       properties:
-        toPlayerId: { type: string, format: uuid }
+        fromId:
+          type: integer
+          description: ID приглашающего игрока (заполняется гейтвеем из токена)
+        toId:
+          type: integer
+          description: ID приглашаемого игрока
         ttlSeconds:
           type: integer
           minimum: 5
@@ -240,12 +287,16 @@ components:
           description: Таймаут ожидания ответа (в оригинале ~10 секунд)
     Invite:
       type: object
-      required: [id, fromPlayerId, toPlayerId, status, createdAt]
+      required: [id, fromId, toId, status, createdAt]
       properties:
         id: { type: string, format: uuid }
-        fromPlayerId: { type: string, format: uuid }
+        fromId:
+          type: integer
+          description: ID приглашающего игрока
         fromName: { type: string }
-        toPlayerId: { type: string, format: uuid }
+        toId:
+          type: integer
+          description: ID приглашаемого игрока
         toName: { type: string }
         status:
           type: string
@@ -270,9 +321,11 @@ components:
         finishedAt: { type: string, format: date-time, nullable: true }
     MatchPlayer:
       type: object
-      required: [playerId, name]
+      required: [id, name]
       properties:
-        playerId: { type: string, format: uuid }
+        id:
+          type: integer
+          description: ID игрока
         name: { type: string }
         seat: { type: integer, minimum: 0, maximum: 1 }
         isFirstAttacker: { type: boolean }

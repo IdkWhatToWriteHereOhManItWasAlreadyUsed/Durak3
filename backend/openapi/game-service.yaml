@@ -1,11 +1,16 @@
 openapi: 3.0.3
 info:
   title: Durak Game Service
-  version: 1.0.0
+  version: 1.1.0
   description: >
     Авторитетный сервис партий. Хранит состояние, проверяет правила и применяет
     ходы. Формат карт и типы ходов совпадают с DurakSharpServer, чтобы клиент
     и существующие повторы остались совместимыми.
+
+    Аутентификации внутри сервиса нет: он доступен только изнутри домена
+    (через api-gateway). Идентификатор игрока (`id`, integer) приходит
+    в запросе; для защищённых действий его подставляет api-gateway из
+    opaque-токена, клиентское значение игнорируется.
 
     Правила (порт `GameSession.cs`):
 
@@ -33,11 +38,9 @@ paths:
       summary: Создать партию
       description: >
         Создаёт партию для двух игроков: перемешивает колоду, раздаёт по 6 карт,
-        определяет козырь и первого атакующего (обычно вызывается
-        matchmaking-service).
+        определяет козырь и первого атакующего. Вызывается matchmaking-service
+        (внутри домена, без токена).
       operationId: createGame
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -75,16 +78,19 @@ paths:
       summary: Получить состояние партии для игрока
       description: >
         Возвращает видимое состояние: карты игрока открыты, карты соперника —
-        скрыты (`hiddenCards` — количество). Аналог сообщения
+        скрыты (`hiddenOpponentCards` — количество). Аналог сообщения
         `PLAYER0:...;PLAYER1:...;DECK:...`.
+
+        Параметр `id` — идентификатор запрашивающего игрока. При вызове через
+        api-gateway подставляется из токена; клиентское значение игнорируется.
       operationId: getGameState
       parameters:
         - $ref: '#/components/parameters/GameId'
-        - name: playerId
+        - name: id
           in: query
           required: true
-          description: Кто запрашивает (влияет на видимость карт)
-          schema: { type: string, format: uuid }
+          description: ID запрашивающего игрока (заполняется гейтвеем из токена)
+          schema: { type: integer }
       responses:
         '200':
           description: Состояние
@@ -106,10 +112,11 @@ paths:
         * `GRAB` — забрать карты со стола (аналог `GRAB`);
         * `WIN` — подтвердить победу (аналог `WIN`).
 
+        Поле `id` в теле — кто делает ход; при вызове через api-gateway
+        подставляется из токена (клиентское значение игнорируется).
+
         Сервис проверяет очерёдность и правила; при нарушении — 409.
       operationId: makeMove
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/GameId'
       requestBody:
@@ -158,9 +165,10 @@ paths:
     post:
       tags: [Games]
       summary: Сдаться
+      description: >
+        Сдаётся игрок, чей `id` передан в теле. При вызове через api-gateway
+        `id` подставляется из токена (клиентское значение игнорируется).
       operationId: resign
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/GameId'
       requestBody:
@@ -169,9 +177,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [playerId]
+              required: [id]
               properties:
-                playerId: { type: string, format: uuid }
+                id:
+                  type: integer
+                  description: ID игрока, который сдаётся (заполняется гейтвеем из токена)
       responses:
         '200':
           description: Партия завершена
@@ -198,12 +208,6 @@ paths:
           $ref: '#/components/responses/NotFound'
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
   parameters:
     GameId:
       name: gameId
@@ -247,9 +251,11 @@ components:
       items: { $ref: '#/components/schemas/Card' }
     PlayerPublic:
       type: object
-      required: [playerId, name]
+      required: [id, name]
       properties:
-        playerId: { type: string, format: uuid }
+        id:
+          type: integer
+          description: ID игрока (int, общий для всех сервисов)
         name: { type: string }
         cardsLeft: { type: integer }
         isAttacker: { type: boolean }
@@ -271,9 +277,15 @@ components:
         players:
           type: array
           items: { $ref: '#/components/schemas/PlayerPublic' }
-        currentPlayerId: { type: string, format: uuid }
-        attackerId: { type: string, format: uuid }
-        defenderId: { type: string, format: uuid }
+        currentPlayerId:
+          type: integer
+          description: ID игрока, чей сейчас ход
+        attackerId:
+          type: integer
+          description: ID атакующего
+        defenderId:
+          type: integer
+          description: ID защищающегося
         yourHand:
           type: array
           description: Карты запросившего игрока (открыты)
@@ -292,15 +304,16 @@ components:
           maxItems: 2
           items:
             type: object
-            required: [playerId, name]
+            required: [id, name]
             properties:
-              playerId: { type: string, format: uuid }
+              id:
+                type: integer
+                description: ID игрока (int)
               name: { type: string }
         matchId: { type: string, format: uuid, nullable: true }
         firstAttackerId:
-          type: string
-          format: uuid
-          description: Кто атакует первым (по умолчанию — первый в players)
+          type: integer
+          description: ID игрока, который атакует первым (по умолчанию — первый в players)
         deckSize:
           type: integer
           enum: [24, 36]
@@ -308,9 +321,11 @@ components:
           description: Вариант колоды (в оригинале 36)
     MoveRequest:
       type: object
-      required: [playerId, type]
+      required: [id, type]
       properties:
-        playerId: { type: string, format: uuid }
+        id:
+          type: integer
+          description: ID игрока, делающего ход (заполняется гейтвеем из токена)
         type:
           type: string
           enum: [CARD, MOVE, GRAB, WIN]
@@ -330,7 +345,9 @@ components:
       required: [sequence, playerId, type, at]
       properties:
         sequence: { type: integer }
-        playerId: { type: string, format: uuid }
+        playerId:
+          type: integer
+          description: ID игрока, сделавшего ход
         type: { type: string, enum: [CARD, MOVE, GRAB, WIN] }
         card: { $ref: '#/components/schemas/Card' }
         stack: { type: integer }
@@ -357,8 +374,8 @@ components:
       properties:
         gameId: { type: string, format: uuid }
         status: { type: string, enum: [active, finished] }
-        winnerId: { type: string, format: uuid, nullable: true }
-        loserId: { type: string, format: uuid, nullable: true }
+        winnerId: { type: integer, nullable: true }
+        loserId: { type: integer, nullable: true }
         reason:
           type: string
           enum: [emptied_hand, resign, timeout, draw]

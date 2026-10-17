@@ -1,11 +1,15 @@
 openapi: 3.0.3
 info:
   title: Durak Replay Service
-  version: 1.0.0
+  version: 1.1.0
   description: >
     Хранение и выдача повторов партий. Заменяет файлы `.dr` и команды
     `REPLAYS` / `GETREPLAY:<n>` из DurakSharpServer. Повтор содержит имена
     игроков, начальное состояние и список ходов.
+
+    Аутентификации внутри сервиса нет: доступен только изнутри домена.
+    Чтение (`GET`) — публичное, запись/удаление — внутренние вызовы
+    от game-service (без токена).
 servers:
   - url: http://localhost:8085
     description: Локальная разработка
@@ -19,10 +23,10 @@ paths:
       summary: Список повторов (аналог команды `REPLAYS`)
       operationId: listReplays
       parameters:
-        - name: playerId
+        - name: id
           in: query
-          description: Фильтр по участнику
-          schema: { type: string, format: uuid }
+          description: Фильтр по участнику (ID игрока)
+          schema: { type: integer }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
@@ -43,8 +47,6 @@ paths:
         Внутренний вызов от game-service по завершении партии. Повтор содержит
         начальную раздачу и все ходы, что позволяет воспроизвести партию.
       operationId: createReplay
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -76,9 +78,8 @@ paths:
     delete:
       tags: [Replays]
       summary: Удалить повтор
+      description: Внутренний вызов (обслуживание/чистка), без токена.
       operationId: deleteReplay
-      security:
-        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/ReplayId'
       responses:
@@ -121,12 +122,6 @@ paths:
           $ref: '#/components/responses/NotFound'
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
   parameters:
     ReplayId:
       name: replayId
@@ -154,9 +149,11 @@ components:
         power: { type: integer, minimum: 6, maximum: 14 }
     PlayerHand:
       type: object
-      required: [playerId, name, cards]
+      required: [id, name, cards]
       properties:
-        playerId: { type: string, format: uuid }
+        id:
+          type: integer
+          description: ID игрока
         name: { type: string }
         cards:
           type: array
@@ -166,7 +163,9 @@ components:
       required: [sequence, playerId, type]
       properties:
         sequence: { type: integer }
-        playerId: { type: string, format: uuid }
+        playerId:
+          type: integer
+          description: ID игрока, сделавшего ход
         type:
           type: string
           enum: [CARD, MOVE, GRAB, WIN]
@@ -187,7 +186,9 @@ components:
           description: Колода в порядке от верхней карты к козырю (нижней)
           items: { $ref: '#/components/schemas/Card' }
         trump: { $ref: '#/components/schemas/Suit' }
-        firstAttackerId: { type: string, format: uuid }
+        firstAttackerId:
+          type: integer
+          description: ID игрока, атакующего первым
     Replay:
       type: object
       required: [id, player1, player2, createdAt, initialState, moves]
@@ -196,7 +197,10 @@ components:
         gameId: { type: string, format: uuid, nullable: true }
         player1: { type: string, description: Имя первого игрока }
         player2: { type: string, description: Имя второго игрока }
-        winnerId: { type: string, format: uuid, nullable: true }
+        winnerId:
+          type: integer
+          nullable: true
+          description: ID игрока-победителя
         createdAt: { type: string, format: date-time }
         initialState: { $ref: '#/components/schemas/InitialState' }
         moves:
@@ -209,7 +213,10 @@ components:
         id: { type: string, format: uuid }
         player1: { type: string }
         player2: { type: string }
-        winnerId: { type: string, format: uuid, nullable: true }
+        winnerId:
+          type: integer
+          nullable: true
+          description: ID игрока-победителя
         movesCount: { type: integer }
         createdAt: { type: string, format: date-time }
     ReplayList:
@@ -255,9 +262,12 @@ components:
       required: [player1, player2, initialState, moves]
       properties:
         gameId: { type: string, format: uuid, nullable: true }
-        player1: { type: string }
-        player2: { type: string }
-        winnerId: { type: string, format: uuid, nullable: true }
+        player1: { type: string, description: Имя первого игрока }
+        player2: { type: string, description: Имя второго игрока }
+        winnerId:
+          type: integer
+          nullable: true
+          description: ID игрока-победителя
         initialState: { $ref: '#/components/schemas/InitialState' }
         moves:
           type: array

@@ -1,0 +1,156 @@
+asyncapi: '2.6.0'
+info:
+  title: Durak Realtime Gateway (WS BFF)
+  version: 2.0.0
+  description: |
+    WebSocket-гейтвей (BFF) для клиента Durak. Держит одно WS-соединение
+    на клиента, аутентифицирует handshake через auth-service, принимает
+    команды (`invite.*`, `game.*`, `presence.heartbeat`) и рассылает
+    события от domain-сервисов через Event Bus (Redis Pub/Sub).
+
+    ## Handshake
+
+    `GET /ws?token=<accessToken>` (HTTP Upgrade). Токен — тот же
+    opaque accessToken, что выдаёт `/api/auth/google` в api-gateway.
+    При handshake выполняется `GET /auth/me` (кэша на MVP нет), из
+    ответа берётся `id` (integer). После Upgrade токен в
+    командах/событиях не участвует — идентификация по `id` из сессии.
+
+    ## Формат сообщений
+
+    Все сообщения — JSON-объекты `{ "type": "...", "payload": {...} }`,
+    исходящие от сервера, и `{ "type": "...", "payload": {...} }` от
+    клиента (клиентские команды). Ошибки — событие `error`.
+
+    ## Авторизация
+
+    - Невалидный/отсутствующий токен при Upgrade → `401`, соединение
+      не устанавливается.
+    - Истёкшая сессия во время жизни соединения → сервер шлёт
+      `error { code: "SESSION_EXPIRED" }` и закрывает с кодом `4401`.
+    - `DELETE /api/auth/logout` в api-gateway публикует
+      `auth.logged_out { token }` в Event Bus; realtime-gateway
+      закрывает все соединения с этим токеном.
+
+    ## Reconnect
+
+    Клиент при разрыве переподключается с тем же `token`. Сервер
+    восстанавливает присутствие и (при необходимости) переотправляет
+    `lobby.players` и актуальный `game.state` по подпискам сессии.
+
+    ## Идентификаторы
+
+    * Игрок — `id: integer` (общий для всех сервисов).
+    * Объекты домена (`gameId`, `matchId`, `inviteId`) — UUID.
+servers:
+  production:
+    url: ws://localhost:8081/ws
+    protocol: wss
+    description: Локальная разработка
+    security:
+      - tokenQuery: []
+defaultContentType: application/json
+
+channels:
+  /ws:
+    description: |
+      Единственный канал. Клиент отправляет команды, сервер — события.
+      Направления разделены по `operationId` в `publish`/`subscribe`.
+    bindings:
+      ws:
+        method: GET
+        query:
+          type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: opaque accessToken из /api/auth/google
+    publish:
+      # ---- client → server (сервер SUBSCRIBE на эти сообщения) ----
+      operationId: onClientMessage
+      description: Команды от клиента
+      message:
+        oneOf:
+          - $ref: '#/components/messages/InviteCreate'
+          - $ref: '#/components/messages/InviteAccept'
+          - $ref: '#/components/messages/InviteDecline'
+          - $ref: '#/components/messages/GameMove'
+          - $ref: '#/components/messages/PresenceHeartbeat'
+          - $ref: '#/components/messages/Ping'
+    subscribe:
+      # ---- server → client (сервер PUBLISH эти сообщения) ----
+      operationId: onServerEvent
+      description: События от сервера
+      message:
+        oneOf:
+          - $ref: '#/components/messages/LobbyPlayers'
+          - $ref: '#/components/messages/PresenceOnline'
+          - $ref: '#/components/messages/PresenceOffline'
+          - $ref: '#/components/messages/InviteCreated'
+          - $ref: '#/components/messages/InviteAccepted'
+          - $ref: '#/components/messages/InviteDeclined'
+          - $ref: '#/components/messages/GameStarted'
+          - $ref: '#/components/messages/GameState'
+          - $ref: '#/components/messages/GameMove'
+          - $ref: '#/components/messages/GameFinished'
+          - $ref: '#/components/messages/Error'
+          - $ref: '#/components/messages/Pong'
+
+components:
+  securitySchemes:
+    tokenQuery:
+      type: httpApiKey
+      name: token
+      in: query
+      description: |
+        opaque accessToken (UUID) из /api/auth/google.
+        Валидируется при Upgrade через GET /auth/me.
+        В access-логах nginx заменяется на `$uri` без query.
+
+  messages:
+    # ---------------------- client → server ----------------------
+    InviteCreate:
+      name: invite.create
+      title: Создать приглашение
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [invite.create] }
+          payload:
+            type: object
+            required: [toId]
+            properties:
+              toId:
+                type: integer
+                description: ID приглашаемого игрока
+              ttlSeconds: { type: integer, minimum: 5, maximum: 120, default: 30 }
+              requestId: { type: string, description: Корреляция с ответом/ошибкой }
+    InviteAccept:
+      name: invite.accept
+      title: Принять приглашение
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [invite.accept] }
+          payload:
+            type: object
+            required: [inviteId]
+            properties:
+              inviteId: { type: string, format: uuid }
+              requestId: { type: string }
+    InviteDecline:
+      name: invite.decline
+      title: Отклонить приглашение
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [invite.decline] }
+          payload:
+            type: object
+            required: [inviteId]
+            properties:
+              inviteId: { type: string, format: uuid }

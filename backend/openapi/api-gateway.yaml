@@ -1,0 +1,798 @@
+openapi: 3.0.3
+info:
+  title: Durak API Gateway (HTTP BFF)
+  version: 2.0.0
+  description: |
+    HTTP-гейтвей (BFF) для клиента Durak. Агрегирует REST-вызовы к
+    domain-сервисам (auth, lobby, matchmaking, game, replay) и адаптирует
+    их под клиента.
+
+    ## Аутентификация
+
+    Единственный способ входа — Google OAuth2 через auth-service.
+    `POST /api/auth/google` обменивает Google authorization code на
+    **opaque accessToken** (UUID, хранится в БД auth-service, TTL 30 дней).
+    Это НЕ JWT.
+
+    Все защищённые эндпоинты требуют:
+
+        Authorization: Bearer <accessToken>
+
+    Гейтвей валидирует токен через `GET /auth/me` у auth-service
+    (кэша на MVP нет) и извлекает `id` (integer). Клиентский opaque-токен
+    за пределы гейтвея не выходит: в domain-сервис уходит только `id`
+    как обычное поле запроса.
+
+    ## Идентификаторы
+
+    * Игрок — `id: integer` (общий для всех сервисов).
+    * Объекты домена (`gameId`, `matchId`, `inviteId`, `replayId`,
+      `sessionId`) — UUID.
+
+    ## Realtime
+
+    WebSocket-канал (`/ws`) обслуживается отдельным сервисом
+    `realtime-gateway`. Его контракт — в `realtime-gateway.yaml` (AsyncAPI).
+    Этот OpenAPI описывает только HTTP-часть.
+servers:
+  - url: http://localhost:8080
+    description: Локальная разработка
+tags:
+  - name: Auth
+  - name: Lobby
+  - name: Matchmaking
+  - name: Game
+  - name: Replay
+
+paths:
+  # ------------------------------- Auth -----------------------------------
+  /api/auth/google:
+    post:
+      tags: [Auth]
+      summary: Вход через Google OAuth2 (проксирует auth-service)
+      description: |
+        Обменивает Google authorization code на opaque accessToken.
+        Если пользователь с таким google_id ещё не существует — создаёт его.
+      operationId: gatewayGoogleLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, redirect_uri]
+              properties:
+                code:
+                  type: string
+                  description: Authorization code от Google
+                redirect_uri:
+                  type: string
+                  format: uri
+                  description: Должен совпадать с тем, что передавался в Google
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Текущий пользователь
+      operationId: gatewayMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Профиль текущего пользователя
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/logout:
+    delete:
+      tags: [Auth]
+      summary: Выход (удаляет сессию, проксирует auth-service)
+      description: |
+        Удаляет opaque-токен в auth-service, инвалидирует его в кэше гейтвея
+        (когда появится) и публикует событие `auth.logged_out` в Event Bus —
+        realtime-gateway по нему закрывает активные WS-сессии этого токена.
+      operationId: gatewayLogout
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Сессия удалена
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/users/{id}:
+    get:
+      tags: [Auth]
+      summary: Публичный профиль пользователя
+      operationId: gatewayUserById
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Профиль
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicUser' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  # ------------------------------- Lobby ----------------------------------
+  /api/lobby/presence:
+    post:
+      tags: [Lobby]
+      summary: Открыть присутствие в лобби (проксирует lobby-service /presence)
+      description: |
+        Регистрирует сессию присутствия. Гейтвей использует `id` из
+        токена как `id` сессии; `name` подтягивается из auth-service.
+        Возвращённый `sessionId` нужен для heartbeat/close.
+      operationId: gatewayOpenPresence
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [in_lobby, in_game, away]
+                  default: in_lobby
+                clientVersion: { type: string, example: "1.0.0" }
+      responses:
+        '201':
+          description: Присутствие открыто
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Presence' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      tags: [Lobby]
+      summary: Закрыть присутствие в лобби
+      operationId: gatewayClosePresence
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Присутствие закрыто
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/lobby/presence/{sessionId}/heartbeat:
+    post:
+      tags: [Lobby]
+      summary: Heartbeat присутствия
+      operationId: gatewayHeartbeat
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Обновлённая сессия
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Presence' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/lobby/players:
+    get:
+      tags: [Lobby]
+      summary: Список онлайн-игроков
+      description: |
+        Агрегирует lobby-service (`/presence`) + auth-service (имена).
+        Имена подтягиваются батчем по `id`.
+      operationId: gatewayOnlinePlayers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: excludeSelf
+          in: query
+          schema: { type: boolean, default: true }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Онлайн-игроки
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, items]
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/OnlinePlayer' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ---------------------------- Matchmaking -------------------------------
+  /api/invites:
+    post:
+      tags: [Matchmaking]
+      summary: Пригласить игрока (проксирует matchmaking-service)
+      description: |
+        `toId` — кого приглашаем; `fromId` подставляется гейтвеем из токена.
+      operationId: gatewayCreateInvite
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toId]
+              properties:
+                toId:
+                  type: integer
+                  description: ID приглашаемого игрока
+                ttlSeconds:
+                  type: integer
+                  minimum: 5
+                  maximum: 120
+                  default: 30
+      responses:
+        '201':
+          description: Приглашение создано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+    get:
+      tags: [Matchmaking]
+      summary: Мои приглашения
+      operationId: gatewayListInvites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: direction
+          in: query
+          schema: { type: string, enum: [incoming, outgoing, all], default: all }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, accepted, declined, expired, cancelled, all]
+            default: pending
+      responses:
+        '200':
+          description: Приглашения
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, items]
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Invite' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/invites/{inviteId}:
+    get:
+      tags: [Matchmaking]
+      summary: Получить приглашение
+      operationId: gatewayGetInvite
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Приглашение
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/invites/{inviteId}/accept:
+    post:
+      tags: [Matchmaking]
+      summary: Принять приглашение (создаёт матч и партию)
+      description: |
+        `id` принимающего подставляется гейтвеем из токена.
+      operationId: gatewayAcceptInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Матч создан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Match' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /api/invites/{inviteId}/decline:
+    post:
+      tags: [Matchmaking]
+      summary: Отклонить приглашение
+      description: |
+        `id` отклоняющего подставляется гейтвеем из токена.
+      operationId: gatewayDeclineInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Отклонено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/invites/{inviteId}/cancel:
+    post:
+      tags: [Matchmaking]
+      summary: Отменить своё приглашение
+      description: |
+        `id` отменяющего подставляется гейтвеем из токена.
+      operationId: gatewayCancelInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Отменено
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invite' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/matches:
+    get:
+      tags: [Matchmaking]
+      summary: Список матчей игрока
+      operationId: gatewayListMatches
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, finished, all], default: all }
+      responses:
+        '200':
+          description: Матчи
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, items]
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Match' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/matches/{matchId}:
+    get:
+      tags: [Matchmaking]
+      summary: Получить матч
+      operationId: gatewayGetMatch
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/MatchId'
+      responses:
+        '200':
+          description: Матч
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Match' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  # -------------------------------- Game ----------------------------------
+  /api/games/{gameId}:
+    get:
+      tags: [Game]
+      summary: Партия (метаданные)
+      operationId: gatewayGame
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Партия
+          content:
+            application/json:
+              schema: { $ref: './game-service.yaml#/components/schemas/Game' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/games/{gameId}/state:
+    get:
+      tags: [Game]
+      summary: Состояние партии для игрока
+      description: |
+        Возвращает видимое состояние: свои карты открыты, карты соперника
+        скрыты (`hiddenOpponentCards`). `id` берётся из токена гейтвеем
+        и подставляется в запрос к game-service.
+      operationId: gatewayGameState
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Состояние
+          content:
+            application/json:
+              schema: { $ref: './game-service.yaml#/components/schemas/GameState' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/games/{gameId}/moves:
+    post:
+      tags: [Game]
+      summary: Сделать ход
+      description: |
+        `id` в теле не нужен — гейтвей подставит его из токена
+        (и перезапишет, если клиент прислал чужой).
+      operationId: gatewayMakeMove
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [CARD, MOVE, GRAB, WIN]
+                card: { $ref: './game-service.yaml#/components/schemas/Card' }
+                stack: { type: integer, minimum: 0, maximum: 3 }
+                clientMoveId: { type: string }
+      responses:
+        '200':
+          description: Новое состояние
+          content:
+            application/json:
+              schema: { $ref: './game-service.yaml#/components/schemas/GameState' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
+  /api/games/{gameId}/moves/history:
+    get:
+      tags: [Game]
+      summary: История ходов
+      operationId: gatewayMoveHistory
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: История
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, items]
+                properties:
+                  total: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: './game-service.yaml#/components/schemas/AppliedMove' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/games/{gameId}/resign:
+    post:
+      tags: [Game]
+      summary: Сдаться
+      description: |
+        `id` сдающегося подставляется гейтвеем из токена.
+      operationId: gatewayResign
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Партия завершена
+          content:
+            application/json:
+              schema: { $ref: './game-service.yaml#/components/schemas/Game' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/games/{gameId}/result:
+    get:
+      tags: [Game]
+      summary: Результат партии
+      operationId: gatewayGameResult
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GameId'
+      responses:
+        '200':
+          description: Результат
+          content:
+            application/json:
+              schema: { $ref: './game-service.yaml#/components/schemas/GameResult' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  # ------------------------------- Replay ---------------------------------
+  /api/replays:
+    get:
+      tags: [Replay]
+      summary: Список повторов
+      operationId: gatewayListReplays
+      security: []
+      parameters:
+        - name: id
+          in: query
+          description: Фильтр по участнику (ID игрока)
+          schema: { type: integer }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Повторы
+          content:
+            application/json:
+              schema: { $ref: './replay-service.yaml#/components/schemas/ReplayList' }
+
+  /api/replays/{replayId}:
+    get:
+      tags: [Replay]
+      summary: Получить повтор
+      operationId: gatewayGetReplay
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ReplayId'
+      responses:
+        '200':
+          description: Повтор
+          content:
+            application/json:
+              schema: { $ref: './replay-service.yaml#/components/schemas/Replay' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/replays/{replayId}/frames:
+    get:
+      tags: [Replay]
+      summary: Кадры повтора
+      operationId: gatewayReplayFrames
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ReplayId'
+        - name: from
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: to
+          in: query
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Кадры
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [replayId, total, frames]
+                properties:
+                  replayId: { type: string, format: uuid }
+                  total: { type: integer }
+                  frames:
+                    type: array
+                    items: { $ref: './replay-service.yaml#/components/schemas/ReplayFrame' }
+        '404':
+          $ref: '#/components/responses/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque-token
+      description: |
+        UUID-токен сессии, выдаётся auth-service при логине через Google.
+        Хранится в БД auth-service (opaque, НЕ JWT). Передавать как
+        `Authorization: Bearer <token>`. TTL 30 дней.
+        Валидируется гейтвеем через `GET /auth/me`. На MVP без кэша.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      description: ID игрока (integer, общий для всех сервисов)
+      schema: { type: integer }
+    InviteId:
+      name: inviteId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    MatchId:
+      name: matchId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    GameId:
+      name: gameId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReplayId:
+      name: replayId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Error:
+      description: Ошибка
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Токен не передан, невалиден или сессия истекла
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    AuthResponse:
+      type: object
+      required: [id, email, username, accessToken]
+      properties:
+        id:
+          type: integer
+          description: ID пользователя (integer, общий для всех сервисов)
+        email: { type: string, format: email }
+        username: { type: string }
+        accessToken:
+          type: string
+          description: UUID opaque-токен сессии, НЕ JWT
+    MeResponse:
+      type: object
+      required: [id, username]
+      properties:
+        id: { type: integer }
+        username: { type: string }
+    PublicUser:
+      type: object
+      required: [id, username]
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        email: { type: string, format: email }
+    Presence:
+      type: object
+      required: [sessionId, id, name, status, lastSeen]
+      properties:
+        sessionId: { type: string, format: uuid }
+        id: { type: integer }
+        name: { type: string }
+        status:
+          type: string
+          enum: [in_lobby, in_game, away]
+        lastSeen: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    OnlinePlayer:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        status:
+          type: string
+          enum: [in_lobby, in_game, away]
+        lastSeen: { type: string, format: date-time }
+    Invite:
+      type: object
+      required: [id, fromId, toId, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromId: { type: integer }
+        fromName: { type: string }
+        toId: { type: integer }
+        toName: { type: string }
+        status:
+          type: string
+          enum: [pending, accepted, declined, expired, cancelled]
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    Match:
+      type: object
+      required: [id, gameId, players, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        gameId: { type: string, format: uuid }
+        players:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              seat: { type: integer, minimum: 0, maximum: 1 }
+              isFirstAttacker: { type: boolean }
+        status:
+          type: string
+          enum: [active, finished]
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: BAD_REQUEST }
+        message: { type: string, example: Invalid request }
