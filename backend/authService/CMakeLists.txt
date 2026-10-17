@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.12...3.31)
-project(authService CXX)
+project(db_test CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(DownloadUserver)
 
 find_package(
-    userver
-    COMPONENTS core #
-               postgresql
-    QUIET
+        userver
+        COMPONENTS core #
+        postgresql
+        QUIET
 )
 if(NOT userver_FOUND)
     # Tries TRY_DIR first, falls back to downloading userver from GitHub using CPM.
@@ -21,31 +21,35 @@ userver_setup_environment()
 include_directories(src)
 
 add_library(
-    ${PROJECT_NAME}_objs OBJECT
-    src/greeting.cpp #
-    src/hello.cpp #
-    src/hello_postgres.cpp
+        ${PROJECT_NAME}_objs OBJECT
+        src/handlers/auth/google_auth.cpp
+        src/repositories/user_repository.cpp
+        src/services/auth_service.cpp
+        src/handlers/auth/logout.cpp
+        src/handlers/users/users.cpp
+        src/handlers/auth/me.cpp
+#        src/handlers/auth/apple_auth.cpp
+#        src/handlers/auth/apple_auth.hpp
+#        src/handlers/purchase_methods/PurchseMethodsGet.cpp
+#        src/handlers/purchase_methods/PurchseMethodsGet.hpp
+#        src/handlers/purchase_methods/PurchaseMethodsPost.cpp
+#        src/handlers/purchase_methods/PurchaseMethodsPost.hpp
+#        src/handlers/purchase_methods/PurchaseMethodsDelete.cpp
+#        src/handlers/purchase_methods/PurchaseMethodsDelete.hpp
+#        src/services/purchase_methods_service.cpp
+#        src/services/purchase_methods_service.hpp
+#        src/repositories/purchase_methods_repository.cpp
+#        src/repositories/purchase_methods_repository.hpp
 )
 target_link_libraries(
-    ${PROJECT_NAME}_objs
-    PUBLIC userver::core #
-           userver::postgresql
+        ${PROJECT_NAME}_objs
+        PUBLIC userver::core
+        userver::postgresql
 )
-
 
 # The Service
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_objs)
-
-# Unit Tests
-add_executable(${PROJECT_NAME}_unittest src/greeting_test.cpp)
-target_link_libraries(${PROJECT_NAME}_unittest PRIVATE ${PROJECT_NAME}_objs userver::utest)
-add_google_tests(${PROJECT_NAME}_unittest)
-
-# Benchmarks
-add_executable(${PROJECT_NAME}_benchmark src/greeting_benchmark.cpp)
-target_link_libraries(${PROJECT_NAME}_benchmark PRIVATE ${PROJECT_NAME}_objs userver::ubench)
-add_google_benchmark_tests(${PROJECT_NAME}_benchmark)
 
 # Functional testing
 userver_testsuite_add_simple()
@@ -62,12 +66,12 @@ endif()
 file(GLOB CONFIGS_FILES ${CMAKE_CURRENT_SOURCE_DIR}/configs/*.yaml ${CMAKE_CURRENT_SOURCE_DIR}/configs/*.json)
 
 install(
-    TARGETS ${PROJECT_NAME}
-    DESTINATION ${CMAKE_INSTALL_BINDIR}
-    COMPONENT ${PROJECT_NAME}
+        TARGETS ${PROJECT_NAME}
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+        COMPONENT ${PROJECT_NAME}
 )
 install(
-    FILES ${CONFIGS_FILES}
-    DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/${PROJECT_NAME}
-    COMPONENT ${PROJECT_NAME}
+        FILES ${CONFIGS_FILES}
+        DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/${PROJECT_NAME}
+        COMPONENT ${PROJECT_NAME}
 )

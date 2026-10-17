@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: soundwave-auth
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=auth-postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=soundwaveUsers
+      - DB_CONNECTION=postgresql://postgres:postgres@postgres:5432/soundwaveUsers
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  soundwave-network:
+    driver: bridge

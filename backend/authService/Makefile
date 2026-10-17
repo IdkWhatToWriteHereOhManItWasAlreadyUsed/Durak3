@@ -1,4 +1,4 @@
-PROJECT_NAME = authService
+PROJECT_NAME = db_test
 NPROCS ?= $(shell nproc)
 CLANG_FORMAT ?= clang-format
 DOCKER_IMAGE ?= ghcr.io/userver-framework/ubuntu-24.04-userver:latest
@@ -27,7 +27,7 @@ $(addprefix build-, $(PRESETS)): build-%: build-%/CMakeCache.txt
 .PHONY: $(addprefix test-, $(PRESETS))
 $(addprefix test-, $(PRESETS)): test-%: build-%/CMakeCache.txt
 	cmake --build build-$* -j $(NPROCS)
-	cd build-$* && ((test -t 1 && GTEST_COLOR=1 PYTEST_ADDOPTS="$${PYTEST_ADDOPTS:+$$PYTEST_ADDOPTS }--color=yes" ctest -V) || ctest -V)
+	cd build-$* && ((test -t 1 && GTEST_COLOR=1 PYTEST_ADDOPTS="--color=yes" ctest -V) || ctest -V)
 
 # Start the service (via testsuite service runner)
 .PHONY: $(addprefix start-, $(PRESETS))
