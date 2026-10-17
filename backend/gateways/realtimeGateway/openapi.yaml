@@ -92,7 +92,7 @@ channels:
           - $ref: '#/components/messages/InviteDeclined'
           - $ref: '#/components/messages/GameStarted'
           - $ref: '#/components/messages/GameState'
-          - $ref: '#/components/messages/GameMove'
+          - $ref: '#/components/messages/GameMoved'
           - $ref: '#/components/messages/GameFinished'
           - $ref: '#/components/messages/Error'
           - $ref: '#/components/messages/Pong'
@@ -107,6 +107,166 @@ components:
         opaque accessToken (UUID) из /api/auth/google.
         Валидируется при Upgrade через GET /auth/me.
         В access-логах nginx заменяется на `$uri` без query.
+
+  schemas:
+    Suit:
+      type: integer
+      description: '0 — бубен, 1 — пик, 2 — червей, 3 — крестей'
+      minimum: 0
+      maximum: 3
+    Power:
+      type: integer
+      description: 'Достоинство: 6..14 (11=В, 12=Д, 13=К, 14=А)'
+      minimum: 6
+      maximum: 14
+    Card:
+      type: object
+      required: [suit, power]
+      properties:
+        suit: { $ref: '#/components/schemas/Suit' }
+        power: { $ref: '#/components/schemas/Power' }
+    Stack:
+      type: array
+      description: Стопка на столе; нечётная длина — есть неотбитая карта
+      maxItems: 2
+      items: { $ref: '#/components/schemas/Card' }
+    OnlinePlayer:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          description: ID игрока (int, общий для всех сервисов)
+        name: { type: string }
+        status:
+          type: string
+          enum: [in_lobby, in_game, away]
+        lastSeen: { type: string, format: date-time }
+    PlayerPublic:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          description: ID игрока (int, общий для всех сервисов)
+        name: { type: string }
+        cardsLeft: { type: integer }
+        isAttacker: { type: boolean }
+    Invite:
+      type: object
+      required: [id, fromId, toId, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromId:
+          type: integer
+          description: ID приглашающего игрока
+        fromName: { type: string }
+        toId:
+          type: integer
+          description: ID приглашаемого игрока
+        toName: { type: string }
+        status:
+          type: string
+          enum: [pending, accepted, declined, expired, cancelled]
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    MatchPlayer:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          description: ID игрока
+        name: { type: string }
+        seat: { type: integer, minimum: 0, maximum: 1 }
+        isFirstAttacker: { type: boolean }
+    Match:
+      type: object
+      required: [id, gameId, players, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        gameId: { type: string, format: uuid }
+        players:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { $ref: '#/components/schemas/MatchPlayer' }
+        status:
+          type: string
+          enum: [active, finished]
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+    GameState:
+      type: object
+      required: [gameId, status, trump, deckSize, table, players, currentPlayerId, attackerId]
+      properties:
+        gameId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [waiting, active, finished]
+        trump: { $ref: '#/components/schemas/Suit' }
+        deckSize: { type: integer, description: Сколько карт осталось в колоде }
+        deckTrumpCard: { $ref: '#/components/schemas/Card' }
+        table:
+          type: array
+          maxItems: 4
+          items: { $ref: '#/components/schemas/Stack' }
+        players:
+          type: array
+          items: { $ref: '#/components/schemas/PlayerPublic' }
+        currentPlayerId:
+          type: integer
+          description: ID игрока, чей сейчас ход
+        attackerId:
+          type: integer
+          description: ID атакующего
+        defenderId:
+          type: integer
+          description: ID защищающегося
+        yourHand:
+          type: array
+          description: Карты запросившего игрока (открыты)
+          items: { $ref: '#/components/schemas/Card' }
+        hiddenOpponentCards:
+          type: integer
+          description: Сколько карт у соперника (скрыты)
+        movesCount: { type: integer }
+    AppliedMove:
+      type: object
+      required: [sequence, playerId, type, at]
+      properties:
+        sequence: { type: integer }
+        playerId:
+          type: integer
+          description: ID игрока, сделавшего ход
+        type: { type: string, enum: [CARD, MOVE, GRAB, WIN] }
+        card: { $ref: '#/components/schemas/Card' }
+        stack: { type: integer }
+        at: { type: string, format: date-time }
+    GameResult:
+      type: object
+      required: [gameId, status]
+      properties:
+        gameId: { type: string, format: uuid }
+        status: { type: string, enum: [active, finished] }
+        winnerId: { type: integer }
+        loserId: { type: integer }
+        reason:
+          type: string
+          enum: [emptied_hand, resign, timeout, draw]
+        replayId: { type: string, format: uuid }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: ILLEGAL_MOVE
+          description: 'Например: SESSION_EXPIRED, ILLEGAL_MOVE, INVITE_NOT_FOUND'
+        message: { type: string, example: Not your turn }
+        requestId:
+          type: string
+          description: Корреляция с командой клиента (если передавался)
 
   messages:
     # ---------------------- client → server ----------------------
@@ -154,3 +314,196 @@ components:
             required: [inviteId]
             properties:
               inviteId: { type: string, format: uuid }
+              requestId: { type: string }
+    GameMove:
+      name: game.move
+      title: Сделать ход (команда клиента)
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [game.move] }
+          payload:
+            type: object
+            required: [type]
+            properties:
+              type:
+                type: string
+                enum: [CARD, MOVE, GRAB, WIN]
+                description: Тип хода (как в MoveRequest game-service); `id` подставляет гейтвей из сессии
+              card: { $ref: '#/components/schemas/Card' }
+              stack: { type: integer, minimum: 0, maximum: 3 }
+              clientMoveId: { type: string, description: Идемпотентный ключ хода }
+              requestId: { type: string }
+    PresenceHeartbeat:
+      name: presence.heartbeat
+      title: Heartbeat присутствия
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type: { type: string, enum: [presence.heartbeat] }
+          payload:
+            type: object
+            properties:
+              sessionId:
+                type: string
+                format: uuid
+                description: Опционально; при отсутствии берётся сессия соединения
+              status:
+                type: string
+                enum: [in_lobby, in_game, away]
+              requestId: { type: string }
+    Ping:
+      name: ping
+      title: Проверка соединения
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type: { type: string, enum: [ping] }
+          payload:
+            type: object
+            properties:
+              t: { type: string, description: Произвольная метка времени }
+              requestId: { type: string }
+
+    # ---------------------- server → client ----------------------
+    LobbyPlayers:
+      name: lobby.players
+      title: Список онлайн-игроков
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [lobby.players] }
+          payload:
+            type: object
+            required: [total, items]
+            properties:
+              total: { type: integer }
+              items:
+                type: array
+                items: { $ref: '#/components/schemas/OnlinePlayer' }
+    PresenceOnline:
+      name: presence.online
+      title: Игрок появился в лобби
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [presence.online] }
+          payload: { $ref: '#/components/schemas/OnlinePlayer' }
+    PresenceOffline:
+      name: presence.offline
+      title: Игрок покинул лобби
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [presence.offline] }
+          payload:
+            type: object
+            required: [id]
+            properties:
+              id:
+                type: integer
+                description: ID игрока
+              sessionId: { type: string, format: uuid }
+              at: { type: string, format: date-time }
+    InviteCreated:
+      name: invite.created
+      title: Приглашение создано (входящее)
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [invite.created] }
+          payload: { $ref: '#/components/schemas/Invite' }
+    InviteAccepted:
+      name: invite.accepted
+      title: Приглашение принято (матч создан)
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [invite.accepted] }
+          payload:
+            type: object
+            required: [invite, match]
+            properties:
+              invite: { $ref: '#/components/schemas/Invite' }
+              match: { $ref: '#/components/schemas/Match' }
+              gameId: { type: string, format: uuid }
+    InviteDeclined:
+      name: invite.declined
+      title: Приглашение отклонено/истекло
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [invite.declined] }
+          payload: { $ref: '#/components/schemas/Invite' }
+    GameStarted:
+      name: game.started
+      title: Партия началась
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [game.started] }
+          payload: { $ref: '#/components/schemas/Match' }
+    GameState:
+      name: game.state
+      title: Состояние партии
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [game.state] }
+          payload: { $ref: '#/components/schemas/GameState' }
+    GameMoved:
+      name: game.move
+      title: Ход применён (событие)
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [game.move] }
+          payload:
+            type: object
+            required: [gameId, move]
+            properties:
+              gameId: { type: string, format: uuid }
+              move: { $ref: '#/components/schemas/AppliedMove' }
+    GameFinished:
+      name: game.finished
+      title: Партия завершена
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [game.finished] }
+          payload: { $ref: '#/components/schemas/GameResult' }
+    Error:
+      name: error
+      title: Ошибка
+      payload:
+        type: object
+        required: [type, payload]
+        properties:
+          type: { type: string, enum: [error] }
+          payload: { $ref: '#/components/schemas/Error' }
+    Pong:
+      name: pong
+      title: Ответ на ping
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type: { type: string, enum: [pong] }
+          payload:
+            type: object
+            properties:
+              t: { type: string }
+              requestId: { type: string }

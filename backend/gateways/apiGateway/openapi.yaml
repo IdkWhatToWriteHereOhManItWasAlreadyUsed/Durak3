@@ -472,7 +472,7 @@ paths:
           description: Состояние
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/GameStatee' }
+              schema: { $ref: '#/components/schemas/GameState' }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -509,7 +509,7 @@ paths:
           description: Новое состояние
           content:
             application/json:
-              schema: { $ref: './game-service.yaml#/components/schemas/GameState' }
+              schema: { $ref: '#/components/schemas/GameState' }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -576,7 +576,7 @@ paths:
           description: Результат
           content:
             application/json:
-              schema: { $ref: '.#/components/schemas/GameResult' }
+              schema: { $ref: '#/components/schemas/GameResult' }
         '404':
           $ref: '#/components/responses/Error'
 
@@ -796,3 +796,219 @@ components:
       properties:
         code: { type: string, example: BAD_REQUEST }
         message: { type: string, example: Invalid request }
+
+    # --- Схемы партии, перенесённые из game-service/openapi.yaml ------------
+    Suit:
+      type: integer
+      description: '0 — бубен, 1 — пик, 2 — червей, 3 — крестей'
+      minimum: 0
+      maximum: 3
+    Power:
+      type: integer
+      description: 'Достоинство: 6..14 (11=В, 12=Д, 13=К, 14=А)'
+      minimum: 6
+      maximum: 14
+    Card:
+      type: object
+      required: [suit, power]
+      properties:
+        suit: { $ref: '#/components/schemas/Suit' }
+        power: { $ref: '#/components/schemas/Power' }
+    Stack:
+      type: array
+      description: Стопка на столе; нечётная длина — есть неотбитая карта
+      maxItems: 2
+      items: { $ref: '#/components/schemas/Card' }
+    PlayerPublic:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          description: ID игрока (int, общий для всех сервисов)
+        name: { type: string }
+        cardsLeft: { type: integer }
+        isAttacker: { type: boolean }
+    GameState:
+      type: object
+      required: [gameId, status, trump, deckSize, table, players, currentPlayerId, attackerId]
+      properties:
+        gameId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [waiting, active, finished]
+        trump: { $ref: '#/components/schemas/Suit' }
+        deckSize: { type: integer, description: Сколько карт осталось в колоде }
+        deckTrumpCard: { $ref: '#/components/schemas/Card' }
+        table:
+          type: array
+          maxItems: 4
+          items: { $ref: '#/components/schemas/Stack' }
+        players:
+          type: array
+          items: { $ref: '#/components/schemas/PlayerPublic' }
+        currentPlayerId:
+          type: integer
+          description: ID игрока, чей сейчас ход
+        attackerId:
+          type: integer
+          description: ID атакующего
+        defenderId:
+          type: integer
+          description: ID защищающегося
+        yourHand:
+          type: array
+          description: Карты запросившего игрока (открыты)
+          items: { $ref: '#/components/schemas/Card' }
+        hiddenOpponentCards:
+          type: integer
+          description: Сколько карт у соперника (скрыты)
+        movesCount: { type: integer }
+    AppliedMove:
+      type: object
+      required: [sequence, playerId, type, at]
+      properties:
+        sequence: { type: integer }
+        playerId:
+          type: integer
+          description: ID игрока, сделавшего ход
+        type: { type: string, enum: [CARD, MOVE, GRAB, WIN] }
+        card: { $ref: '#/components/schemas/Card' }
+        stack: { type: integer }
+        at: { type: string, format: date-time }
+    Game:
+      type: object
+      required: [id, status, players, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        matchId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [waiting, active, finished]
+        players:
+          type: array
+          items: { $ref: '#/components/schemas/PlayerPublic' }
+        trump: { $ref: '#/components/schemas/Suit' }
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        replayId: { type: string, format: uuid }
+    GameResult:
+      type: object
+      required: [gameId, status]
+      properties:
+        gameId: { type: string, format: uuid }
+        status: { type: string, enum: [active, finished] }
+        winnerId: { type: integer }
+        loserId: { type: integer }
+        reason:
+          type: string
+          enum: [emptied_hand, resign, timeout, draw]
+        replayId: { type: string, format: uuid }
+
+    # --- Схемы повторов, перенесённые из replay-service/openapi.yaml --------
+    PlayerHand:
+      type: object
+      required: [id, name, cards]
+      properties:
+        id:
+          type: integer
+          description: ID игрока
+        name: { type: string }
+        cards:
+          type: array
+          items: { $ref: '#/components/schemas/Card' }
+    ReplayMove:
+      type: object
+      required: [sequence, playerId, type]
+      properties:
+        sequence: { type: integer }
+        playerId:
+          type: integer
+          description: ID игрока, сделавшего ход
+        type: { type: string, enum: [CARD, MOVE, GRAB, WIN] }
+        card: { $ref: '#/components/schemas/Card' }
+        stack: { type: integer, minimum: 0, maximum: 3 }
+        at: { type: string, format: date-time }
+    InitialState:
+      type: object
+      required: [players, deck, trump]
+      properties:
+        players:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { $ref: '#/components/schemas/PlayerHand' }
+        deck:
+          type: array
+          description: Колода в порядке от верхней карты к козырю (нижней)
+          items: { $ref: '#/components/schemas/Card' }
+        trump: { $ref: '#/components/schemas/Suit' }
+        firstAttackerId:
+          type: integer
+          description: ID игрока, атакующего первым
+    Replay:
+      type: object
+      required: [id, player1, player2, createdAt, initialState, moves]
+      properties:
+        id: { type: string, format: uuid }
+        gameId: { type: string, format: uuid }
+        player1: { type: string, description: Имя первого игрока }
+        player2: { type: string, description: Имя второго игрока }
+        winnerId:
+          type: integer
+          description: ID игрока-победителя
+        createdAt: { type: string, format: date-time }
+        initialState: { $ref: '#/components/schemas/InitialState' }
+        moves:
+          type: array
+          items: { $ref: '#/components/schemas/ReplayMove' }
+    ReplaySummary:
+      type: object
+      required: [id, player1, player2, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        player1: { type: string }
+        player2: { type: string }
+        winnerId:
+          type: integer
+          description: ID игрока-победителя
+        movesCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+    ReplayList:
+      type: object
+      required: [total, items]
+      properties:
+        total: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ReplaySummary' }
+    ReplayFrame:
+      type: object
+      required: [index, label]
+      properties:
+        index: { type: integer }
+        label: { type: string, example: "Игрок Рахмат ходит шестёркой бубен" }
+        state:
+          type: object
+          description: >
+            Полное состояние на этом шаге (карты обоих игроков открыты,
+            колода, стол, козырь, очерёдность) — как в SessionGraphics при
+            проигрывании повтора.
+          properties:
+            player1Cards:
+              type: array
+              items: { $ref: '#/components/schemas/Card' }
+            player2Cards:
+              type: array
+              items: { $ref: '#/components/schemas/Card' }
+            deck:
+              type: array
+              items: { $ref: '#/components/schemas/Card' }
+            table:
+              type: array
+              items:
+                type: array
+                items: { $ref: '#/components/schemas/Card' }
+            trump: { $ref: '#/components/schemas/Suit' }
+            currentPlayerIndex: { type: integer, minimum: 0, maximum: 1 }
+            attackerIndex: { type: integer, minimum: 0, maximum: 1 }
