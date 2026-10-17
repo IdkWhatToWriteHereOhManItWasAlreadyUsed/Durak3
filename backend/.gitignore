@@ -1,0 +1,10 @@
+/assets
+/bindings
+/build
+/cmake-build-debug
+/cmake-build-release
+*.spv
+/.idea
+/.vs
+/.claude
+/out
