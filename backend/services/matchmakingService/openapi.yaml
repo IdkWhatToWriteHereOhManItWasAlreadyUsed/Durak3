@@ -60,13 +60,12 @@ paths:
           schema: { type: integer }
         - name: direction
           in: query
-          schema: { type: string, enum: [incoming, outgoing, all], default: all }
+          description: 'Одно из: incoming, outgoing, all. По умолчанию all.'
+          schema: { type: string }
         - name: status
           in: query
-          schema:
-            type: string
-            enum: [pending, accepted, declined, expired, cancelled, all]
-            default: pending
+          description: 'Одно из: pending, accepted, declined, expired, cancelled, all. По умолчанию pending.'
+          schema: { type: string }
       responses:
         '200':
           description: Приглашения
@@ -208,7 +207,8 @@ paths:
           schema: { type: integer }
         - name: status
           in: query
-          schema: { type: string, enum: [active, finished, all], default: all }
+          description: 'Одно из: active, finished, all. По умолчанию all.'
+          schema: { type: string }
       responses:
         '200':
           description: Матчи
@@ -244,12 +244,18 @@ components:
       name: inviteId
       in: path
       required: true
-      schema: { type: string, format: uuid }
+      # NOTE: format: uuid намеренно не указан — chaotic v3_3_rc генерирует
+      # некорректный TrivialParameter для path-параметров с format: uuid.
+      # Валидация UUID выполняется в хендлере (boost::uuids::string_generator).
+      schema: { type: string }
     MatchId:
       name: matchId
       in: path
       required: true
-      schema: { type: string, format: uuid }
+      # NOTE: format: uuid намеренно не указан — chaotic v3_3_rc генерирует
+      # некорректный TrivialParameter для path-параметров с format: uuid.
+      # Валидация UUID выполняется в хендлере (boost::uuids::string_generator).
+      schema: { type: string }
 
   responses:
     NotFound:
@@ -318,7 +324,7 @@ components:
           type: string
           enum: [active, finished]
         createdAt: { type: string, format: date-time }
-        finishedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time }
     MatchPlayer:
       type: object
       required: [id, name]

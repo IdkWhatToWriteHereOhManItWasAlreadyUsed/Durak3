@@ -127,7 +127,10 @@ components:
       name: replayId
       in: path
       required: true
-      schema: { type: string, format: uuid }
+      # NOTE: format: uuid намеренно не указан — chaotic v3_3_rc генерирует
+      # некорректный TrivialParameter для path-параметров с format: uuid.
+      # Валидация UUID выполняется в хендлере (boost::uuids::string_generator).
+      schema: { type: string }
 
   responses:
     NotFound:
@@ -194,12 +197,11 @@ components:
       required: [id, player1, player2, createdAt, initialState, moves]
       properties:
         id: { type: string, format: uuid }
-        gameId: { type: string, format: uuid, nullable: true }
+        gameId: { type: string, format: uuid }
         player1: { type: string, description: Имя первого игрока }
         player2: { type: string, description: Имя второго игрока }
         winnerId:
           type: integer
-          nullable: true
           description: ID игрока-победителя
         createdAt: { type: string, format: date-time }
         initialState: { $ref: '#/components/schemas/InitialState' }
@@ -215,7 +217,6 @@ components:
         player2: { type: string }
         winnerId:
           type: integer
-          nullable: true
           description: ID игрока-победителя
         movesCount: { type: integer }
         createdAt: { type: string, format: date-time }
@@ -261,12 +262,11 @@ components:
       type: object
       required: [player1, player2, initialState, moves]
       properties:
-        gameId: { type: string, format: uuid, nullable: true }
+        gameId: { type: string, format: uuid }
         player1: { type: string, description: Имя первого игрока }
         player2: { type: string, description: Имя второго игрока }
         winnerId:
           type: integer
-          nullable: true
           description: ID игрока-победителя
         initialState: { $ref: '#/components/schemas/InitialState' }
         moves:

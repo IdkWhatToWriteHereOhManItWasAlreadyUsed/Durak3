@@ -213,7 +213,10 @@ components:
       name: gameId
       in: path
       required: true
-      schema: { type: string, format: uuid }
+      # NOTE: format: uuid намеренно не указан — chaotic v3_3_rc генерирует
+      # некорректный TrivialParameter для path-параметров с format: uuid.
+      # Валидация UUID выполняется в хендлере (boost::uuids::string_generator).
+      schema: { type: string }
 
   responses:
     BadRequest:
@@ -310,7 +313,7 @@ components:
                 type: integer
                 description: ID игрока (int)
               name: { type: string }
-        matchId: { type: string, format: uuid, nullable: true }
+        matchId: { type: string, format: uuid }
         firstAttackerId:
           type: integer
           description: ID игрока, который атакует первым (по умолчанию — первый в players)
@@ -357,7 +360,7 @@ components:
       required: [id, status, players, createdAt]
       properties:
         id: { type: string, format: uuid }
-        matchId: { type: string, format: uuid, nullable: true }
+        matchId: { type: string, format: uuid }
         status:
           type: string
           enum: [waiting, active, finished]
@@ -366,21 +369,20 @@ components:
           items: { $ref: '#/components/schemas/PlayerPublic' }
         trump: { $ref: '#/components/schemas/Suit' }
         createdAt: { type: string, format: date-time }
-        finishedAt: { type: string, format: date-time, nullable: true }
-        replayId: { type: string, format: uuid, nullable: true }
+        finishedAt: { type: string, format: date-time}
+        replayId: { type: string, format: uuid}
     GameResult:
       type: object
       required: [gameId, status]
       properties:
         gameId: { type: string, format: uuid }
         status: { type: string, enum: [active, finished] }
-        winnerId: { type: integer, nullable: true }
-        loserId: { type: integer, nullable: true }
+        winnerId: { type: integer}
+        loserId: { type: integer}
         reason:
           type: string
           enum: [emptied_hand, resign, timeout, draw]
-          nullable: true
-        replayId: { type: string, format: uuid, nullable: true }
+        replayId: { type: string, format: uuid}
     Error:
       type: object
       required: [code, message]

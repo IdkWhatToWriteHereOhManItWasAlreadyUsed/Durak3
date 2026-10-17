@@ -127,7 +127,10 @@ components:
       name: sessionId
       in: path
       required: true
-      schema: { type: string, format: uuid }
+      # NOTE: format: uuid намеренно не указан — chaotic v3_3_rc генерирует
+      # некорректный TrivialParameter для path-параметров с format: uuid.
+      # Валидация UUID выполняется в хендлере (boost::uuids::string_generator).
+      schema: { type: string }
 
   responses:
     NotFound:
@@ -174,8 +177,7 @@ components:
         status:
           type: string
           enum: [in_lobby, in_game, away]
-          nullable: true
-        lastSeen: { type: string, format: date-time, nullable: true }
+        lastSeen: { type: string, format: date-time }
     OnlineList:
       type: object
       required: [total, items]
