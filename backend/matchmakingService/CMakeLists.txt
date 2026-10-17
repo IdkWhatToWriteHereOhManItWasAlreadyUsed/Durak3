@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.12...3.31)
 project(matchmakingService CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+set(USERVER_FEATURE_POSTGRESQL ON CACHE BOOL "" FORCE)
+set(USERVER_FEATURE_PATCH_LIBPQ OFF CACHE BOOL "" FORCE)
 include(DownloadUserver)
 
 find_package(

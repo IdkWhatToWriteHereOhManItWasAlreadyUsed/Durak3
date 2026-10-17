@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.12...3.31)
-project(db_test CXX)
+project(authService CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+set(USERVER_FEATURE_POSTGRESQL ON CACHE BOOL "" FORCE)
+set(USERVER_FEATURE_PATCH_LIBPQ OFF CACHE BOOL "" FORCE)
 include(DownloadUserver)
 
 find_package(
@@ -28,18 +30,6 @@ add_library(
         src/handlers/auth/logout.cpp
         src/handlers/users/users.cpp
         src/handlers/auth/me.cpp
-#        src/handlers/auth/apple_auth.cpp
-#        src/handlers/auth/apple_auth.hpp
-#        src/handlers/purchase_methods/PurchseMethodsGet.cpp
-#        src/handlers/purchase_methods/PurchseMethodsGet.hpp
-#        src/handlers/purchase_methods/PurchaseMethodsPost.cpp
-#        src/handlers/purchase_methods/PurchaseMethodsPost.hpp
-#        src/handlers/purchase_methods/PurchaseMethodsDelete.cpp
-#        src/handlers/purchase_methods/PurchaseMethodsDelete.hpp
-#        src/services/purchase_methods_service.cpp
-#        src/services/purchase_methods_service.hpp
-#        src/repositories/purchase_methods_repository.cpp
-#        src/repositories/purchase_methods_repository.hpp
 )
 target_link_libraries(
         ${PROJECT_NAME}_objs
