@@ -17,7 +17,7 @@ OpenAPI-спецификация в этой папке.
 
 | Сервис | Порт (dev) | Ответственность | Спецификация |
 |---|---|---|---|
-| **identity-service** | 8081 | Аккаунты игроков, выдача JWT, профили | [`identity-service.yaml`](identity-service.yaml) |
+| **identity-service** | 8081 | Аккаунты игроков, выдача JWT, профили | [`identity-service.yaml`](auth-service.yaml) |
 | **lobby-service** | 8082 | Presence (кто онлайн), сердцебиение, список игроков | [`lobby-service.yaml`](lobby-service.yaml) |
 | **matchmaking-service** | 8083 | Приглашения, принятие/отказ, создание матча | [`matchmaking-service.yaml`](matchmaking-service.yaml) |
 | **game-service** | 8084 | Партии: раздача, проверка и применение ходов, результат | [`game-service.yaml`](game-service.yaml) |
