@@ -1,0 +1,54 @@
+sequenceDiagram
+    autonumber
+    participant A as Client A (fromId)
+    participant B as Client B (toId)
+    participant GW as api-gateway
+    participant RT as Realtime GW
+    participant MM as Matchmaking
+    participant G as Game
+    participant Bus as Event Bus
+
+    Note over A,RT: Оба клиента уже имеют accessToken и открытое WS к RT.<br/>id=A и id=B зафиксированы в WS-сессиях.
+
+    A->>GW: POST /api/invites toId=B ttlSeconds=30
+    Note right of GW: AuthCheckMiddleware вызывает GET /auth/me<br/>fromId подставляется из токена
+    GW->>MM: POST /invites fromId=A toId=B ttlSeconds=30
+    MM-->>GW: 201 Invite status=pending
+    GW-->>A: 201 Invite
+    MM->>Bus: publish invite.created
+
+    Bus-->>RT: invite.created
+    Note over RT: RT находит WS-сессии по fromId=A и toId=B
+    RT-->>B: WS invite.created входящее приглашение
+    RT-->>A: WS invite.created эхо отправителю
+
+    B->>GW: POST /api/invites/inviteId/accept
+    Note right of GW: AuthCheckMiddleware вызывает GET /auth/me<br/>id=B подставляется в тело к MM
+    GW->>MM: POST /invites/inviteId/accept id=B
+
+    MM->>G: POST /games players=A,B matchId firstAttackerId=A
+    Note right of G: перемешивание колоды 36, раздача по 6,<br/>козырь = нижняя карта, attacker=A, defender=B
+    G-->>MM: 201 Game id=gameId status=active
+    MM->>MM: Match.gameId = gameId<br/>invite.status = accepted<br/>save Match
+    MM->>Bus: publish invite.accepted
+    MM->>Bus: publish game.started
+    MM-->>GW: 200 Match
+    GW-->>B: 200 Match
+
+    Bus-->>RT: invite.accepted
+    Bus-->>RT: game.started
+    Note over RT: RT находит WS-сессии по match.players id A и B
+
+    RT->>G: GET /games/gameId/state?id=A
+    G-->>RT: GameState yourHand=A hiddenOpponentCards=6
+    RT-->>A: WS invite.accepted
+    RT-->>A: WS game.started
+    RT-->>A: WS game.state for A
+
+    RT->>G: GET /games/gameId/state?id=B
+    G-->>RT: GameState yourHand=B hiddenOpponentCards=6
+    RT-->>B: WS invite.accepted
+    RT-->>B: WS game.started
+    RT-->>B: WS game.state for B
+
+    Note over A,B: Партия active. Первый атакующий A.<br/>Далее ходы только по WS game.move
