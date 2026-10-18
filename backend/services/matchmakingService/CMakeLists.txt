@@ -3,13 +3,16 @@ project(matchmakingService CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(USERVER_FEATURE_POSTGRESQL ON CACHE BOOL "" FORCE)
+set(USERVER_FEATURE_REDIS ON CACHE BOOL "" FORCE)
 set(USERVER_FEATURE_PATCH_LIBPQ OFF CACHE BOOL "" FORCE)
 include(DownloadUserver)
 
 find_package(
     userver
-    COMPONENTS core #
-               postgresql
+    COMPONENTS
+        core #
+        postgresql
+        redis
     QUIET
 )
 if(NOT userver_FOUND)
@@ -31,8 +34,10 @@ add_library(
 
 target_link_libraries(
         ${PROJECT_NAME}_objs
-        PUBLIC userver::core #
+        PUBLIC
+        userver::core #
         userver::postgresql
+        userver::redis
 )
 
 userver_target_generate_openapi_handlers(
@@ -61,6 +66,7 @@ userver_add_sql_library(
 target_link_libraries(${PROJECT_NAME}_handlers
         #${PROJECT_NAME}_sql
         userver::postgresql
+        userver::redis
 )
 
 # The Service

@@ -1,0 +1,58 @@
+flowchart LR
+    subgraph Clients["Клиенты"]
+        A["Client A<br/>id=A"]
+        B["Client B<br/>id=B"]
+    end
+
+    subgraph Edge["Edge / BFF"]
+        GW["api-gateway<br/>HTTP BFF :8080<br/>AuthCheckMiddleware"]
+        RT["realtime-gateway<br/>WS BFF :8080/ws<br/>handshake GET /auth/me"]
+    end
+
+    subgraph Domain["Domain services (внутри домена)"]
+        AUTH["auth-service<br/>:8081"]
+        LOBBY["lobby-service<br/>:8082"]
+        MM["matchmaking-service<br/>:8083"]
+        GAME["game-service<br/>:8084"]
+    end
+
+    subgraph Infra["Infrastructure"]
+        REDIS[("Redis<br/>Pub/Sub + кэш")]
+        ADB[("auth DB")]
+        LDB[("lobby DB")]
+        MDB[("matchmaking DB")]
+        GDB[("game DB")]
+    end
+
+    %% Клиенты → гейтвеи
+    A -- "HTTP REST" --> GW
+    B -- "HTTP REST" --> GW
+    A -- "WS /ws?token=" --> RT
+    B -- "WS /ws?token=" --> RT
+
+    %% api-gateway → домен (HTTP)
+    GW -- "POST /auth/google<br/>GET /auth/me<br/>DELETE /auth/logout" --> AUTH
+    GW -- "presence open/close/heartbeat<br/>GET /players" --> LOBBY
+    GW -- "POST /invites<br/>accept/decline/cancel<br/>GET /matches" --> MM
+    GW -- "GET /games/{id}<br/>state/moves/history/resign/result" --> GAME
+
+    %% realtime-gateway → домен (HTTP, sync)
+    RT -- "GET /auth/me (handshake)" --> AUTH
+    RT -- "presence.heartbeat" --> LOBBY
+    RT -- "invite.create/accept/decline<br/>(WS-команды)" --> MM
+    RT -- "POST /games/{id}/moves<br/>GET /state?id=" --> GAME
+
+    %% Domain → Event Bus
+    MM -- "publish invite.created<br/>invite.accepted<br/>invite.declined<br/>game.started" --> REDIS
+    GAME -. "publish game.move<br/>game.finished (опционально)" .-> REDIS
+    LOBBY -. "publish presence.online<br/>presence.offline" .-> REDIS
+    GW -- "publish auth.logged_out" --> REDIS
+
+    %% Event Bus → realtime-gateway
+    REDIS -- "subscribe invite.*<br/>game.*<br/>presence.*<br/>auth.logged_out" --> RT
+
+    %% Domain → БД
+    AUTH --- ADB
+    LOBBY --- LDB
+    MM --- MDB
+    GAME --- GDB
