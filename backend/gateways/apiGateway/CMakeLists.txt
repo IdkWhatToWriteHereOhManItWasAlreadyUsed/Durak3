@@ -23,6 +23,7 @@ find_package(Jsoncpp REQUIRED)
 
 add_executable(${PROJECT_NAME}
         ${SOURCE_FILES}
+        src/middleware/AuthCheckMiddleware.hpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

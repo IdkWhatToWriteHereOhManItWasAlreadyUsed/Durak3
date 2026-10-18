@@ -7,9 +7,6 @@
         }
     ],
     "app": {
-        "threads_num": 6,
-        "document_root": "http",
-        "implicit_page": "index.html",
-        "client_max_body_size": "100M"
+        "threads_num": 4
     }
 }

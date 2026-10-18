@@ -7,9 +7,14 @@
         }
     ],
     "app": {
-        "threads_num": 6,
-        "document_root": "http",
-        "implicit_page": "index.html",
-        "client_max_body_size": "100M"
+        "threads_num": 4
+    },
+    "custom_config" : {
+        "auth":        "http://auth-service:8080",
+        "lobby":       "http://lobby-service:8080",
+        "matchmaking": "http://matchmaking-service:8080",
+        "game":        "http://game-service:8080",
+        "replay":      "http://replay-service:8080",
+        "redis":       "redis://redis-cache:6379"
     }
 }
