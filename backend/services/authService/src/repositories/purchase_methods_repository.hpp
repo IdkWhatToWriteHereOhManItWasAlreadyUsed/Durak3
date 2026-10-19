@@ -15,8 +15,7 @@ class PurchaseMethodsRepository final : public userver::components::ComponentBas
 public:
     static constexpr std::string_view kName = "purchaseMethods-repository";
 
-    PurchaseMethodsRepository(const userver::components::ComponentConfig&  config,
-                              const userver::components::ComponentContext& context);
+    PurchaseMethodsRepository(const userver::components::ComponentConfig& config, const userver::components::ComponentContext& context);
 
     PurchaseMethod create(int userId, const std::string& type, const std::string& details);
 

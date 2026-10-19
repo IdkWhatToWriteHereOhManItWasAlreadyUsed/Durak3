@@ -10,8 +10,7 @@ AuthController::AuthController() {
 
 // Проксирует auth-service POST /auth/google: обменивает authorization code
 // на opaque accessToken. Тело запроса пересылается как есть.
-void AuthController::GoogleLogin(const HttpRequestPtr&                         req,
-                                 std::function<void(const HttpResponsePtr&)>&& callback) {
+void AuthController::GoogleLogin(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     const auto json = req->getJsonObject();
     if (!json) {
         BadRequest(callback, "Request body is required");
@@ -26,8 +25,7 @@ void AuthController::GoogleLogin(const HttpRequestPtr&                         r
 
 // Проксирует auth-service GET /auth/me: профиль текущего пользователя.
 // Заголовок Authorization пересылается как есть.
-void AuthController::Me(const HttpRequestPtr&                         req,
-                        std::function<void(const HttpResponsePtr&)>&& callback) {
+void AuthController::Me(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Get);
     downstream->setPath("/auth/me");
@@ -36,8 +34,7 @@ void AuthController::Me(const HttpRequestPtr&                         req,
 
 // Проксирует auth-service DELETE /auth/logout: удаляет сессию.
 // Заголовок Authorization пересылается как есть.
-void AuthController::Logout(const HttpRequestPtr&                         req,
-                            std::function<void(const HttpResponsePtr&)>&& callback) {
+void AuthController::Logout(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Delete);
     downstream->setPath("/auth/logout");
@@ -46,9 +43,7 @@ void AuthController::Logout(const HttpRequestPtr&                         req,
 
 // Проксирует auth-service GET /auth/users/{id}: публичный профиль по id.
 // id из маршрута подставляется в путь downstream-запроса.
-void AuthController::UserById(const HttpRequestPtr&                         req,
-                              std::function<void(const HttpResponsePtr&)>&& callback,
-                              uint64_t                                      id) {
+void AuthController::UserById(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, uint64_t id) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Get);
     downstream->setPath("/auth/users/" + std::to_string(id));
@@ -79,8 +74,7 @@ void AuthController::Forward(const HttpRequestPtr&                              
         5);
 }
 
-void AuthController::BadRequest(const std::function<void(const HttpResponsePtr&)>& callback,
-                                const std::string&                                 message) {
+void AuthController::BadRequest(const std::function<void(const HttpResponsePtr&)>& callback, const std::string& message) {
     auto response = HttpResponse::newHttpResponse();
     response->setStatusCode(k400BadRequest);
     response->setContentTypeCode(ContentType::CT_APPLICATION_JSON);

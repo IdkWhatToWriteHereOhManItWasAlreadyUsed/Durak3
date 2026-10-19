@@ -11,7 +11,7 @@ EmptyLineBeforeAccessModifier: Leave
 
 BreakBeforeBraces: Attach
 
-ColumnLimit: 100
+ColumnLimit: 140
 
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false

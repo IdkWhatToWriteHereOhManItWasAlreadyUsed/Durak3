@@ -15,8 +15,7 @@ class AuthService final : public userver::components::ComponentBase {
 public:
     static constexpr std::string_view kName = "auth-service";
 
-    explicit AuthService(const userver::components::ComponentConfig&  config,
-                         const userver::components::ComponentContext& context);
+    explicit AuthService(const userver::components::ComponentConfig& config, const userver::components::ComponentContext& context);
 
     User loginWithGoogle(const std::string& code, const std::string& redirect_uri);
     User getUserByToken(const std::string& token) const;

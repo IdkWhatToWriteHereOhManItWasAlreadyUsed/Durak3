@@ -25,16 +25,13 @@ public:
             m_isEnabled = false;
             LOG_INFO << "Auth middleware was not enabled!";
         } else {
-            m_isEnabled = true;
-            m_authServiceClient =
-                HttpClient::newHttpClient(app().getCustomConfig()["auth"].asString());
+            m_isEnabled         = true;
+            m_authServiceClient = HttpClient::newHttpClient(app().getCustomConfig()["auth"].asString());
             LOG_INFO << "Auth middleware launched";
         }
     }
 
-    void invoke(const drogon::HttpRequestPtr& req,
-                MiddlewareNextCallback&&      nextCb,
-                MiddlewareCallback&&          mcb) override {
+    void invoke(const drogon::HttpRequestPtr& req, MiddlewareNextCallback&& nextCb, MiddlewareCallback&& mcb) override {
         LOG_INFO << "AuthCheckMiddleware invoked for path: " << req->path();
 
         if (!m_isEnabled) {
@@ -57,10 +54,8 @@ public:
 
             m_authServiceClient->sendRequest(
                 authRequest,
-                [req, nextCb = std::move(nextCb), mcb = std::move(mcb)](
-                    ReqResult result, const HttpResponsePtr& authResponse) mutable {
-                    if (result == ReqResult::Ok && authResponse &&
-                        authResponse->getStatusCode() == k200OK) {
+                [req, nextCb = std::move(nextCb), mcb = std::move(mcb)](ReqResult result, const HttpResponsePtr& authResponse) mutable {
+                    if (result == ReqResult::Ok && authResponse && authResponse->getStatusCode() == k200OK) {
                         auto json = authResponse->getJsonObject();
                         if (json && json->isMember("id")) {
                             int64_t userId = (*json)["id"].asInt64();
@@ -70,8 +65,7 @@ public:
                             // нужен, дальше гуляет только внутренний id игрока.
                             req->getAttributes()->insert("userId", userId);
 
-                            nextCb(
-                                [mcb = std::move(mcb)](const HttpResponsePtr& resp) { mcb(resp); });
+                            nextCb([mcb = std::move(mcb)](const HttpResponsePtr& resp) { mcb(resp); });
                             return;
                         }
                         LOG_ERROR << "Auth response missing 'id' field";

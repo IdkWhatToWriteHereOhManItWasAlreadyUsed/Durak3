@@ -8,12 +8,10 @@
 
 shop::handlers::UserHandler::UserHandler(const userver::components::ComponentConfig&  config,
                                          const userver::components::ComponentContext& context)
-    : HttpHandlerBase(config, context),
-      user_repository_(context.FindComponent<shop::repositories::UserRepository>()) {}
+    : HttpHandlerBase(config, context), user_repository_(context.FindComponent<shop::repositories::UserRepository>()) {}
 
-std::string shop::handlers::UserHandler::HandleRequestThrow(
-    const userver::server::http::HttpRequest& request,
-    userver::server::request::RequestContext& context) const {
+std::string shop::handlers::UserHandler::HandleRequestThrow(const userver::server::http::HttpRequest& request,
+                                                            userver::server::request::RequestContext& context) const {
     const auto id       = std::stoll(request.GetPathArg("id"));
     const auto response = user_repository_.findById(id);
     if (!response.has_value()) {

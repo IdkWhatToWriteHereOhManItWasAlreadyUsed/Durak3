@@ -8,25 +8,18 @@
 #include <userver/storages/postgres/component.hpp>
 
 namespace shop::repositories {
-PurchaseMethodsRepository::PurchaseMethodsRepository(
-    const userver::components::ComponentConfig&  config,
-    const userver::components::ComponentContext& context)
-    : ComponentBase(config, context),
-      pg_cluster(
-          context.FindComponent<userver::components::Postgres>("postgres-db-1").GetCluster()) {}
+PurchaseMethodsRepository::PurchaseMethodsRepository(const userver::components::ComponentConfig&  config,
+                                                     const userver::components::ComponentContext& context)
+    : ComponentBase(config, context), pg_cluster(context.FindComponent<userver::components::Postgres>("postgres-db-1").GetCluster()) {}
 
-PurchaseMethod PurchaseMethodsRepository::create(int                userId,
-                                                 const std::string& type,
-                                                 const std::string& details) {
-    const auto result =
-        pg_cluster->Execute(userver::storages::postgres::ClusterHostType::kMaster,
-                            "INSERT INTO purchase_methods(user_id, type, details) VALUES($1, $2, "
-                            "$3::jsonb) RETURNING id, user_id, type, details::text",
-                            userId, type, details);
+PurchaseMethod PurchaseMethodsRepository::create(int userId, const std::string& type, const std::string& details) {
+    const auto result = pg_cluster->Execute(userver::storages::postgres::ClusterHostType::kMaster,
+                                            "INSERT INTO purchase_methods(user_id, type, details) VALUES($1, $2, "
+                                            "$3::jsonb) RETURNING id, user_id, type, details::text",
+                                            userId, type, details);
 
     const auto row = result.Front();
-    return {row["id"].As<int>(), row["user_id"].As<int>(), row["type"].As<std::string>(),
-            row["details"].As<std::string>()};
+    return {row["id"].As<int>(), row["user_id"].As<int>(), row["type"].As<std::string>(), row["details"].As<std::string>()};
 }
 
 void PurchaseMethodsRepository::deleteById(int id, int user_id) {
@@ -42,8 +35,7 @@ std::vector<PurchaseMethod> PurchaseMethodsRepository::getAll(int userId) {
 
     std::vector<PurchaseMethod> methods;
     for (const auto& row : result) {
-        methods.push_back({row["id"].As<int>(), row["user_id"].As<int>(),
-                           row["type"].As<std::string>(), row["details"].As<std::string>()});
+        methods.push_back({row["id"].As<int>(), row["user_id"].As<int>(), row["type"].As<std::string>(), row["details"].As<std::string>()});
     }
     return methods;
 }

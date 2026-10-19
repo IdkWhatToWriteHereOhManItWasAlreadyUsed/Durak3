@@ -14,8 +14,7 @@ ReplayController::ReplayController() {
 
 // Проксирует replay-service GET /replays: список повторов.
 // Query-параметры (id, limit, offset) пересылаются как есть.
-void ReplayController::ListReplays(const HttpRequestPtr&                         req,
-                                   std::function<void(const HttpResponsePtr&)>&& callback) {
+void ReplayController::ListReplays(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     std::string query;
     const auto  id = req->getParameter("id");
     if (!id.empty()) {
@@ -39,9 +38,7 @@ void ReplayController::ListReplays(const HttpRequestPtr&                        
 }
 
 // Проксирует replay-service GET /replays/{replayId}: получить повтор.
-void ReplayController::GetReplay(const HttpRequestPtr&,
-                                 std::function<void(const HttpResponsePtr&)>&& callback,
-                                 std::string                                   replayId) {
+void ReplayController::GetReplay(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback, std::string replayId) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Get);
     downstream->setPath("/replays/" + replayId);
@@ -71,8 +68,7 @@ void ReplayController::GetReplayFrames(const HttpRequestPtr&                    
 }
 
 // Отправляет downstream-запрос в replay-service и пробрасывает ответ клиенту.
-void ReplayController::Forward(const HttpRequestPtr&                              downstream,
-                               const std::function<void(const HttpResponsePtr&)>& callback) {
+void ReplayController::Forward(const HttpRequestPtr& downstream, const std::function<void(const HttpResponsePtr&)>& callback) {
     auto client = client_;
     client->sendRequest(
         downstream,
@@ -90,7 +86,6 @@ void ReplayController::Unreachable(const std::function<void(const HttpResponsePt
     auto response = HttpResponse::newHttpResponse();
     response->setStatusCode(k503ServiceUnavailable);
     response->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-    response->setBody(
-        R"({"code":"SERVICE_UNAVAILABLE","message":"replay-service is unreachable"})");
+    response->setBody(R"({"code":"SERVICE_UNAVAILABLE","message":"replay-service is unreachable"})");
     callback(response);
 }

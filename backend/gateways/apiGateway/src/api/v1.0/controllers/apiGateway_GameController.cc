@@ -9,9 +9,7 @@ GameController::GameController() {
 }
 
 // Проксирует game-service GET /games/{gameId}: метаданные партии.
-void GameController::GetGame(const HttpRequestPtr&,
-                             std::function<void(const HttpResponsePtr&)>&& callback,
-                             std::string                                   gameId) {
+void GameController::GetGame(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback, std::string gameId) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Get);
     downstream->setPath("/games/" + gameId);
@@ -20,22 +18,17 @@ void GameController::GetGame(const HttpRequestPtr&,
 
 // Проксирует game-service GET /games/{gameId}/state: видимое состояние
 // партии. id запрашивающего игрока подставляется из middleware.
-void GameController::GetGameState(const HttpRequestPtr&                         req,
-                                  std::function<void(const HttpResponsePtr&)>&& callback,
-                                  std::string                                   gameId) {
+void GameController::GetGameState(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, std::string gameId) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Get);
-    downstream->setPath("/games/" + gameId + "/state?id=" +
-                        std::to_string(req->getAttributes()->get<int64_t>("userId")));
+    downstream->setPath("/games/" + gameId + "/state?id=" + std::to_string(req->getAttributes()->get<int64_t>("userId")));
     Forward(downstream, callback);
 }
 
 // Проксирует game-service POST /games/{gameId}/moves: сделать ход.
 // Тело клиента (type, card, stack, clientMoveId) пересылается как есть,
 // id делающего ход перезаписывается значением из middleware.
-void GameController::MakeMove(const HttpRequestPtr&                         req,
-                              std::function<void(const HttpResponsePtr&)>&& callback,
-                              std::string                                   gameId) {
+void GameController::MakeMove(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, std::string gameId) {
     const auto  json = req->getJsonObject();
     Json::Value body = json ? *json : Json::Value(Json::objectValue);
     body["id"]       = req->getAttributes()->get<int64_t>("userId");
@@ -47,9 +40,7 @@ void GameController::MakeMove(const HttpRequestPtr&                         req,
 }
 
 // Проксирует game-service GET /games/{gameId}/moves/history: история ходов.
-void GameController::GetMoveHistory(const HttpRequestPtr&,
-                                    std::function<void(const HttpResponsePtr&)>&& callback,
-                                    std::string                                   gameId) {
+void GameController::GetMoveHistory(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback, std::string gameId) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Get);
     downstream->setPath("/games/" + gameId + "/moves/history");
@@ -58,9 +49,7 @@ void GameController::GetMoveHistory(const HttpRequestPtr&,
 
 // Проксирует game-service POST /games/{gameId}/resign: сдаться.
 // Тело формируется гейтвеем: id сдающегося подставляется из middleware.
-void GameController::Resign(const HttpRequestPtr&                         req,
-                            std::function<void(const HttpResponsePtr&)>&& callback,
-                            std::string                                   gameId) {
+void GameController::Resign(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, std::string gameId) {
     Json::Value body(Json::objectValue);
     body["id"] = req->getAttributes()->get<int64_t>("userId");
 
@@ -71,9 +60,7 @@ void GameController::Resign(const HttpRequestPtr&                         req,
 }
 
 // Проксирует game-service GET /games/{gameId}/result: результат партии.
-void GameController::GetGameResult(const HttpRequestPtr&,
-                                   std::function<void(const HttpResponsePtr&)>&& callback,
-                                   std::string                                   gameId) {
+void GameController::GetGameResult(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback, std::string gameId) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Get);
     downstream->setPath("/games/" + gameId + "/result");
@@ -81,8 +68,7 @@ void GameController::GetGameResult(const HttpRequestPtr&,
 }
 
 // Отправляет downstream-запрос в game-service и пробрасывает ответ клиенту.
-void GameController::Forward(const HttpRequestPtr&                              downstream,
-                             const std::function<void(const HttpResponsePtr&)>& callback) {
+void GameController::Forward(const HttpRequestPtr& downstream, const std::function<void(const HttpResponsePtr&)>& callback) {
     auto client = client_;
     client->sendRequest(
         downstream,

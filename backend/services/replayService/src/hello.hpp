@@ -10,8 +10,7 @@ public:
 
     using HttpHandlerBase::HttpHandlerBase;
 
-    std::string HandleRequestThrow(const userver::server::http::HttpRequest&,
-                                   userver::server::request::RequestContext&) const override;
+    std::string HandleRequestThrow(const userver::server::http::HttpRequest&, userver::server::request::RequestContext&) const override;
 };
 
 }  // namespace replayService

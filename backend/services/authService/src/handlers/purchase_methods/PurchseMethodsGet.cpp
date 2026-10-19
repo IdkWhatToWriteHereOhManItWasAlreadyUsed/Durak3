@@ -9,12 +9,10 @@
 namespace shop::handlers {
 PurchaseMethodsGet::PurchaseMethodsGet(const userver::components::ComponentConfig&  config,
                                        const userver::components::ComponentContext& context)
-    : HttpHandlerBase(config, context),
-      service_(context.FindComponent<services::PurchaseMethodsService>()) {}
+    : HttpHandlerBase(config, context), service_(context.FindComponent<services::PurchaseMethodsService>()) {}
 
-std::string PurchaseMethodsGet::HandleRequestThrow(
-    const userver::server::http::HttpRequest& request,
-    userver::server::request::RequestContext& context) const {
+std::string PurchaseMethodsGet::HandleRequestThrow(const userver::server::http::HttpRequest& request,
+                                                   userver::server::request::RequestContext& context) const {
     return HttpHandlerBase::HandleRequestThrow(request, context);
 }
 }  // namespace shop::handlers

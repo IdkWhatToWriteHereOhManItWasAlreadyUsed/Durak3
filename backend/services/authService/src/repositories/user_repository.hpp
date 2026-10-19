@@ -14,16 +14,11 @@ class UserRepository final : public userver::components::ComponentBase {
 public:
     static constexpr std::string_view kName = "user-repository";
 
-    UserRepository(const userver::components::ComponentConfig&  config,
-                   const userver::components::ComponentContext& context);
+    UserRepository(const userver::components::ComponentConfig& config, const userver::components::ComponentContext& context);
 
-    User create(const std::string& email,
-                const std::string& username,
-                const std::string& avatar_url);
+    User create(const std::string& email, const std::string& username, const std::string& avatar_url);
 
-    void                linkOAuthProvider(int                user_id,
-                                          const std::string& provider,
-                                          const std::string& provider_id);
+    void                linkOAuthProvider(int user_id, const std::string& provider, const std::string& provider_id);
     std::optional<User> findByOauthId(const std::string&, const std::string&) const;
     std::optional<User> findById(int64_t id) const;
 
