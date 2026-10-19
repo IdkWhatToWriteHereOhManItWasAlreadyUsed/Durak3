@@ -1,25 +1,24 @@
-#include <greeting.hpp>
-
 #include <fmt/format.h>
 
+#include <greeting.hpp>
 #include <userver/utils/assert.hpp>
 
 namespace replayService {
 
 std::string SayHelloTo(std::string_view name, UserType type) {
-  if (name.empty()) {
-    name = "unknown user";
-  }
+    if (name.empty()) {
+        name = "unknown user";
+    }
 
-  switch (type) {
-    case UserType::kFirstTime:
-      return fmt::format("Hello, {}!\n", name);
-    case UserType::kKnown:
-      return fmt::format("Hi again, {}!\n", name);
-  }
+    switch (type) {
+        case UserType::kFirstTime:
+            return fmt::format("Hello, {}!\n", name);
+        case UserType::kKnown:
+            return fmt::format("Hi again, {}!\n", name);
+    }
 
-  UASSERT(false);
-  return "unreachable";
+    UASSERT(false);
+    return "unreachable";
 }
 
 }  // namespace replayService

@@ -2,11 +2,10 @@
 
 namespace handlers::lobbyService::heartbeat {
 
-Response View::Handle(Request&& /*request*/, Deps&& /*deps*/,
-                      RequestContext& /*context*/) {
-  // Handle request using dependencies from Deps (clients, caches, configs,
-  // databases...)
-  return {};
+Response View::Handle(Request&& /*request*/, Deps&& /*deps*/, RequestContext& /*context*/) {
+    // Handle request using dependencies from Deps (clients, caches, configs,
+    // databases...)
+    return {};
 }
 
 /*

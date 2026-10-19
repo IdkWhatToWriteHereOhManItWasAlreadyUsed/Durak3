@@ -5,7 +5,10 @@
 
 namespace gameService {
 
-enum class UserType { kFirstTime, kKnown };
+enum class UserType {
+    kFirstTime,
+    kKnown
+};
 
 std::string SayHelloTo(std::string_view name, UserType type);
 

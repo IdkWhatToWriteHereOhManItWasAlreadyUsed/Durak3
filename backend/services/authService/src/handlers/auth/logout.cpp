@@ -8,22 +8,21 @@
 #include <userver/components/component_context.hpp>
 
 namespace shop::handlers {
-LogoutHandler::LogoutHandler(
-    const userver::components::ComponentConfig& config,
-    const userver::components::ComponentContext& context)
+LogoutHandler::LogoutHandler(const userver::components::ComponentConfig&  config,
+                             const userver::components::ComponentContext& context)
     : HttpHandlerBase(config, context),
       auth_service_(context.FindComponent<shop::services::AuthService>()) {}
 
 std::string LogoutHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest& request,
     userver::server::request::RequestContext& context) const {
-  const auto auth = request.GetHeader("Authorization");
-  const auto token = auth.substr(7);
+    const auto auth  = request.GetHeader("Authorization");
+    const auto token = auth.substr(7);
 
-  auth_service_.deleteSession(token);
+    auth_service_.deleteSession(token);
 
-  request.GetHttpResponse().SetStatus(userver::server::http::HttpStatus::kOk);
-  return "{}";
+    request.GetHttpResponse().SetStatus(userver::server::http::HttpStatus::kOk);
+    return "{}";
 }
 
 }  // namespace shop::handlers
