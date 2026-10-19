@@ -1,29 +1,36 @@
 cmake_minimum_required(VERSION 3.12...3.31)
 project(gameService CXX)
 
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-set(USERVER_FEATURE_POSTGRESQL ON CACHE BOOL "" FORCE)
-set(USERVER_FEATURE_PATCH_LIBPQ OFF CACHE BOOL "" FORCE)
+
+# Googletest для юнит-тестов скачивается CPM, если в системе не найден.
+set(USERVER_DOWNLOAD_PACKAGE_GTEST ON CACHE BOOL "" FORCE)
+set(USERVER_DOWNLOAD_PACKAGE_GOOGLETEST ON CACHE BOOL "" FORCE)
 include(DownloadUserver)
+
 
 find_package(
     userver
     COMPONENTS
         core #
-        postgresql
         chaotic
         chaotic-openapi
     QUIET
 )
 if(NOT userver_FOUND)
     # Tries TRY_DIR first, falls back to downloading userver from GitHub using CPM.
-    #download_userver(TRY_DIR third_party/userver)
+    download_userver(TRY_DIR third_party/userver)
 endif()
 
 userver_setup_environment()
 
 # Common sources
 include_directories(src)
+
+# In-memory parties: Game with state on top of the engine + GameManager registry.
+add_subdirectory(src/match_manager)
 
 add_library(
     ${PROJECT_NAME}_objs OBJECT
@@ -35,7 +42,6 @@ add_library(
 target_link_libraries(
         ${PROJECT_NAME}_objs
         PUBLIC userver::core #
-        userver::postgresql
 )
 
 userver_target_generate_openapi_handlers(
@@ -46,24 +52,7 @@ userver_target_generate_openapi_handlers(
         SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src"
         SCHEMAS "${CMAKE_CURRENT_SOURCE_DIR}/openapi.yaml"
 )
-#[[
-userver_add_sql_library(
-        ${PROJECT_NAME}_sql
-        NAMESPACE ${PROJECT_NAME}
-        OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}
-        DTO_DIALECT postgresql
-        MIGRATIONS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/postgresql/schemas
-        SOURCE_DIR     ${CMAKE_CURRENT_SOURCE_DIR}/postgresql/queries
-        QUERIES_DIR    ${CMAKE_CURRENT_SOURCE_DIR}/postgresql/queries
-        DUMP_DIR       ${CMAKE_CURRENT_SOURCE_DIR}
-        SQL_FILES *.sql
-)
-]]
 
-target_link_libraries(${PROJECT_NAME}_handlers
-        #${PROJECT_NAME}_sql
-        userver::postgresql
-)
 
 # The Service
 add_executable(${PROJECT_NAME} src/main.cpp)
@@ -71,7 +60,6 @@ add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE
         ${PROJECT_NAME}_objs
         ${PROJECT_NAME}_handlers
-        #${PROJECT_NAME}_sql
 )
 
 userver_generate_config_yaml(
@@ -79,6 +67,18 @@ userver_generate_config_yaml(
         BASE_CONFIGS "${CMAKE_CURRENT_SOURCE_DIR}/configs/static_config.yaml"
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/config.yaml"
 )
+
+# Engine unit tests
+add_executable(${PROJECT_NAME}_engine_test src/match_manager/match/state/game_session_test.cpp)
+target_link_libraries(${PROJECT_NAME}_engine_test PRIVATE durak_state userver::utest)
+
+# Match unit tests (Match + MatchManager)
+add_executable(${PROJECT_NAME}_games_test src/match_manager/match_test.cpp)
+target_link_libraries(${PROJECT_NAME}_games_test PRIVATE durak_match userver::utest)
+
+include(CTest)
+add_test(NAME ${PROJECT_NAME}_engine_test COMMAND ${PROJECT_NAME}_engine_test)
+add_test(NAME ${PROJECT_NAME}_games_test COMMAND ${PROJECT_NAME}_games_test)
 
 # Unit Tests
 #add_executable(${PROJECT_NAME}_unittest src/greeting_test.cpp)

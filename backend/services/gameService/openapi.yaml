@@ -319,7 +319,7 @@ components:
           description: ID игрока, который атакует первым (по умолчанию — первый в players)
         deckSize:
           type: integer
-          enum: [24, 36]
+          enum: [36]
           default: 36
           description: Вариант колоды (в оригинале 36)
     MoveRequest:

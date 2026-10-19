@@ -8,26 +8,25 @@
 #include <userver/server/handlers/tests_control.hpp>
 #include <userver/testsuite/testsuite_support.hpp>
 
-#include <userver/storages/postgres/component.hpp> 
+#include <userver/storages/postgres/component.hpp>
 
 #include <userver/utils/daemon_run.hpp>
 
 #include <hello.hpp>
-#include <hello_postgres.hpp> 
+#include <hello_postgres.hpp>
 
 int main(int argc, char* argv[]) {
-    auto component_list =
-        userver::components::MinimalServerComponentList()
-            .Append<userver::server::handlers::Ping>()
-            .Append<userver::components::TestsuiteSupport>()
-            .AppendComponentList(userver::clients::http::ComponentList())
-            .Append<userver::clients::dns::Component>()
-            .Append<userver::server::handlers::TestsControl>()
-            .Append<userver::congestion_control::Component>()
-            .Append<gameService::Hello>()
-            .Append<userver::components::Postgres>("postgres-db-1")
-            .Append<gameService::HelloPostgres>()
-        ;
+  auto component_list =
+      userver::components::MinimalServerComponentList()
+          .Append<userver::server::handlers::Ping>()
+          .Append<userver::components::TestsuiteSupport>()
+          .AppendComponentList(userver::clients::http::ComponentList())
+          .Append<userver::clients::dns::Component>()
+          .Append<userver::server::handlers::TestsControl>()
+          .Append<userver::congestion_control::Component>()
+          .Append<gameService::Hello>()
+          .Append<userver::components::Postgres>("postgres-db-1")
+          .Append<gameService::HelloPostgres>();
 
-    return userver::utils::DaemonMain(argc, argv, component_list);
+  return userver::utils::DaemonMain(argc, argv, component_list);
 }

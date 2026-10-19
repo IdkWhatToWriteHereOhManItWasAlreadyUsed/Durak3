@@ -5,9 +5,6 @@
 #ifndef DB_TEST_PURCHASEMETHODSPOST_HPP
 #define DB_TEST_PURCHASEMETHODSPOST_HPP
 
+class PurchaseMethodsPost {};
 
-class PurchaseMethodsPost {
-};
-
-
-#endif //DB_TEST_PURCHASEMETHODSPOST_HPP
+#endif  // DB_TEST_PURCHASEMETHODSPOST_HPP

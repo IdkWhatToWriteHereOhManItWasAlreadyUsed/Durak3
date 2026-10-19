@@ -5,9 +5,6 @@
 #ifndef DB_TEST_PURCHASEMETHODSDELETE_HPP
 #define DB_TEST_PURCHASEMETHODSDELETE_HPP
 
+class PurchaseMethodsDelete {};
 
-class PurchaseMethodsDelete {
-};
-
-
-#endif //DB_TEST_PURCHASEMETHODSDELETE_HPP
+#endif  // DB_TEST_PURCHASEMETHODSDELETE_HPP

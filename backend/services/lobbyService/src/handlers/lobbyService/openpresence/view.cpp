@@ -2,20 +2,21 @@
 
 namespace handlers::lobbyService::openpresence {
 
-Response View::Handle(Request&& /*request*/, Deps&& /*deps*/, RequestContext& /*context*/) {
-  // Handle request using dependencies from Deps (clients, caches, configs, databases...)
+Response View::Handle(Request&& /*request*/, Deps&& /*deps*/,
+                      RequestContext& /*context*/) {
+  // Handle request using dependencies from Deps (clients, caches, configs,
+  // databases...)
   return {};
 }
 
 /*
-std::string View::GetRequestBodyForLogging(const USERVER_NAMESPACE::formats::json::Value& body) {
-    (void)body;
-    return {};
+std::string View::GetRequestBodyForLogging(const
+USERVER_NAMESPACE::formats::json::Value& body) { (void)body; return {};
 }
 
-std::string View::GetInvalidRequestBodyForLogging(const USERVER_NAMESPACE::server::http::HttpRequest& request) {
-    (void)request;
-    return {};
+std::string View::GetInvalidRequestBodyForLogging(const
+USERVER_NAMESPACE::server::http::HttpRequest& request) { (void)request; return
+{};
 }
 
 std::string View::GetResponseForLogging(

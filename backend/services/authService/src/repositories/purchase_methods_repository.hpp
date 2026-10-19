@@ -10,27 +10,25 @@
 #include "models/user.hpp"
 
 namespace shop::repositories {
-    class PurchaseMethodsRepository final : public
-            userver::components::ComponentBase {
-    public:
-        static constexpr std::string_view kName = "purchaseMethods-repository";
+class PurchaseMethodsRepository final
+    : public userver::components::ComponentBase {
+ public:
+  static constexpr std::string_view kName = "purchaseMethods-repository";
 
-        PurchaseMethodsRepository(
-            const userver::components::ComponentConfig &config,
-            const userver::components::ComponentContext &context
-        );
+  PurchaseMethodsRepository(
+      const userver::components::ComponentConfig& config,
+      const userver::components::ComponentContext& context);
 
-        PurchaseMethod create(int userId,
-                              const std::string &type,
-                              const std::string &details);
+  PurchaseMethod create(int userId, const std::string& type,
+                        const std::string& details);
 
-        void deleteById(int id, int user_id);
+  void deleteById(int id, int user_id);
 
-        std::vector<PurchaseMethod> getAll(int user_id);
+  std::vector<PurchaseMethod> getAll(int user_id);
 
-    private:
-        userver::storages::postgres::ClusterPtr pg_cluster;
-    };
-}
+ private:
+  userver::storages::postgres::ClusterPtr pg_cluster;
+};
+}  // namespace shop::repositories
 
-#endif //DB_TEST_PURCHASE_METHODS_REPOSITORY_HPP
+#endif  // DB_TEST_PURCHASE_METHODS_REPOSITORY_HPP
