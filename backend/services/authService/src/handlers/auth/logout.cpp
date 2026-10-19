@@ -13,7 +13,7 @@ LogoutHandler::LogoutHandler(const userver::components::ComponentConfig& config,
 
 std::string LogoutHandler::HandleRequestThrow(const userver::server::http::HttpRequest& request,
                                               userver::server::request::RequestContext& context) const {
-    const auto auth  = request.GetHeader("Authorization");
+    const auto auth = request.GetHeader("Authorization");
     const auto token = auth.substr(7);
 
     auth_service_.deleteSession(token);

@@ -29,9 +29,9 @@ void GameController::GetGameState(const HttpRequestPtr& req, std::function<void(
 // Тело клиента (type, card, stack, clientMoveId) пересылается как есть,
 // id делающего ход перезаписывается значением из middleware.
 void GameController::MakeMove(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, std::string gameId) {
-    const auto  json = req->getJsonObject();
+    const auto json = req->getJsonObject();
     Json::Value body = json ? *json : Json::Value(Json::objectValue);
-    body["id"]       = req->getAttributes()->get<int64_t>("userId");
+    body["id"] = req->getAttributes()->get<int64_t>("userId");
 
     auto downstream = HttpRequest::newHttpJsonRequest(body);
     downstream->setMethod(drogon::Post);

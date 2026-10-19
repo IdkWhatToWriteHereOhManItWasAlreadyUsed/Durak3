@@ -18,10 +18,10 @@ MatchmakingController::MatchmakingController() {
 // Тело клиента (toId, ttlSeconds) пересылается как есть, fromId
 // подставляется из middleware (клиентское значение игнорируется).
 void MatchmakingController::CreateInvite(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-    const auto  json = req->getJsonObject();
+    const auto json = req->getJsonObject();
     Json::Value body = json ? *json : Json::Value(Json::objectValue);
-    body["fromId"]   = req->getAttributes()->get<int64_t>("userId");
-    auto downstream  = HttpRequest::newHttpJsonRequest(body);
+    body["fromId"] = req->getAttributes()->get<int64_t>("userId");
+    auto downstream = HttpRequest::newHttpJsonRequest(body);
     downstream->setMethod(drogon::Post);
     downstream->setPath("/invites");
     Forward(downstream, callback);
@@ -60,9 +60,9 @@ void MatchmakingController::GetInvite(const HttpRequestPtr&, std::function<void(
 // Проксирует matchmaking-service POST /invites/{inviteId}/accept: принять
 // приглашение (`GO!`, создает матч и партию). Тело формируется гейтвеем:
 // id принимающего подставляется из middleware.
-void MatchmakingController::AcceptInvite(const HttpRequestPtr&                         req,
+void MatchmakingController::AcceptInvite(const HttpRequestPtr& req,
                                          std::function<void(const HttpResponsePtr&)>&& callback,
-                                         std::string                                   inviteId) {
+                                         std::string inviteId) {
     Json::Value body(Json::objectValue);
     body["id"] = req->getAttributes()->get<int64_t>("userId");
 
@@ -74,9 +74,9 @@ void MatchmakingController::AcceptInvite(const HttpRequestPtr&                  
 
 // Проксирует matchmaking-service POST /invites/{inviteId}/decline:
 // отклонить приглашение (`NO!`). id отклоняющего подставляется из middleware.
-void MatchmakingController::DeclineInvite(const HttpRequestPtr&                         req,
+void MatchmakingController::DeclineInvite(const HttpRequestPtr& req,
                                           std::function<void(const HttpResponsePtr&)>&& callback,
-                                          std::string                                   inviteId) {
+                                          std::string inviteId) {
     Json::Value body(Json::objectValue);
     body["id"] = req->getAttributes()->get<int64_t>("userId");
 
@@ -88,9 +88,9 @@ void MatchmakingController::DeclineInvite(const HttpRequestPtr&                 
 
 // Проксирует matchmaking-service POST /invites/{inviteId}/cancel:
 // отменить своё приглашение. id отменяющего подставляется из middleware.
-void MatchmakingController::CancelInvite(const HttpRequestPtr&                         req,
+void MatchmakingController::CancelInvite(const HttpRequestPtr& req,
                                          std::function<void(const HttpResponsePtr&)>&& callback,
-                                         std::string                                   inviteId) {
+                                         std::string inviteId) {
     Json::Value body(Json::objectValue);
     body["id"] = req->getAttributes()->get<int64_t>("userId");
 

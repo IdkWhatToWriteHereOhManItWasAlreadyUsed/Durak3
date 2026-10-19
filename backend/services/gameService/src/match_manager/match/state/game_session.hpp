@@ -1,8 +1,10 @@
 #pragma once
 #include <array>
 #include <vector>
+
 #include "card.hpp"
 #include "move.hpp"
+
 namespace durak::state {
 class GameSession {
 public:
@@ -36,4 +38,4 @@ private:
     void InitializeDeck(unsigned seed);
     void GiveCards();
 };
-}
+}  // namespace durak::state

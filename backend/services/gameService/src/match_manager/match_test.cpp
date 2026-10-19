@@ -1,22 +1,27 @@
+#include "match/match.hpp"
+
 #include <userver/utest/utest.hpp>
 #include <utility>
+
 #include "match/state/game_session.hpp"
 #include "match/state/replay.hpp"
-#include "match/match.hpp"
 #include "match_manager.hpp"
+
 namespace {
 using durak::Card;
 using durak::match::ActionType;
 using durak::match::FinishReason;
 using durak::match::Match;
-using durak::match::MatchManager;
 using durak::match::MatchError;
+using durak::match::MatchManager;
 using durak::match::MoveRequest;
 using durak::match::Player;
+
 Player MakePlayer(std::int64_t id, std::string name) {
     return Player{id, std::move(name)};
 }
-}
+}  // namespace
+
 UTEST(MatchManager, CreateReturnsIdAndInfo) {
     MatchManager manager(42);
     const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
@@ -31,6 +36,7 @@ UTEST(MatchManager, CreateReturnsIdAndInfo) {
     EXPECT_EQ(info->players[1].id, 2);
     EXPECT_EQ(info->players[0].name, "Alice");
 }
+
 UTEST(MatchManager, CreateWithExplicitFirstAttacker) {
     MatchManager manager(42);
     const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, 2);
@@ -41,15 +47,15 @@ UTEST(MatchManager, CreateWithExplicitFirstAttacker) {
     EXPECT_EQ(state->attacker_id, 2);
     EXPECT_EQ(state->defender_id, 1);
 }
+
 UTEST(MatchManager, CreateRejectsBadPlayers) {
     MatchManager manager(42);
     EXPECT_FALSE(manager.CreateMatch({MakePlayer(1, "solo")}).has_value());
-    EXPECT_FALSE(
-        manager.CreateMatch({MakePlayer(1, "a"), MakePlayer(2, "b"), MakePlayer(3, "c")})
-            .has_value());
+    EXPECT_FALSE(manager.CreateMatch({MakePlayer(1, "a"), MakePlayer(2, "b"), MakePlayer(3, "c")}).has_value());
     EXPECT_FALSE(manager.CreateMatch({MakePlayer(1, "a"), MakePlayer(1, "dup")}).has_value());
     EXPECT_EQ(manager.GetMatchCount(), 0u);
 }
+
 UTEST(MatchManager, UnknownMatch) {
     MatchManager manager(42);
     EXPECT_FALSE(manager.GetMatch("no-such-match").has_value());
@@ -61,6 +67,7 @@ UTEST(MatchManager, UnknownMatch) {
     EXPECT_EQ(error, MatchError::kMatchNotFound);
     EXPECT_EQ(manager.Resign("no-such-match", 1), MatchError::kMatchNotFound);
 }
+
 UTEST(MatchManager, GetMatchStateViewersPerspective) {
     MatchManager manager(42);
     const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
@@ -80,6 +87,7 @@ UTEST(MatchManager, GetMatchStateViewersPerspective) {
     EXPECT_FALSE(manager.GetMatchState(*match_id, 999, &error).has_value());
     EXPECT_EQ(error, MatchError::kUnknownPlayer);
 }
+
 UTEST(MatchManager, MoveTurnOrderEnforced) {
     MatchManager manager(42);
     const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
@@ -87,6 +95,7 @@ UTEST(MatchManager, MoveTurnOrderEnforced) {
     EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{}), MatchError::kNotThisPlayersTurn);
     EXPECT_EQ(manager.ApplyMove(*match_id, 999, MoveRequest{}), MatchError::kUnknownPlayer);
 }
+
 UTEST(MatchManager, LegalMoveFlowWithHistory) {
     MatchManager manager(42);
     const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
@@ -95,20 +104,15 @@ UTEST(MatchManager, LegalMoveFlowWithHistory) {
     ASSERT_TRUE(state.has_value());
     const Card attack_card = state->your_hand.front();
     durak::match::MatchMove applied;
-    EXPECT_EQ(
-        manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}, &applied),
-        MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}, &applied), MatchError::kOk);
     EXPECT_EQ(applied.player_id, 1);
     EXPECT_EQ(applied.type, ActionType::kCard);
     EXPECT_EQ(applied.stack, 0);
     EXPECT_EQ(applied.sequence, 1u);
     EXPECT_EQ(applied.card, attack_card);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kTransfer}),
-              MatchError::kOk);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}),
-              MatchError::kIllegalMove);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kTransfer}),
-              MatchError::kIllegalMove);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kTransfer}), MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}), MatchError::kIllegalMove);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kTransfer}), MatchError::kIllegalMove);
     EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kGrab}), MatchError::kOk);
     MatchError error = MatchError::kOk;
     const auto history = manager.GetMatchHistory(*match_id, &error);
@@ -125,6 +129,7 @@ UTEST(MatchManager, LegalMoveFlowWithHistory) {
     EXPECT_EQ(after_grab->attacker_id, 1);
     EXPECT_TRUE(after_grab->table[0].empty());
 }
+
 UTEST(MatchManager, ReplayTextIsCompatibleWithStateReplay) {
     MatchManager manager(42);
     const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
@@ -132,10 +137,8 @@ UTEST(MatchManager, ReplayTextIsCompatibleWithStateReplay) {
     auto state = manager.GetMatchState(*match_id, 1);
     ASSERT_TRUE(state.has_value());
     const Card attack_card = state->your_hand.front();
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}),
-              MatchError::kOk);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kTransfer}),
-              MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}), MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kTransfer}), MatchError::kOk);
     EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kGrab}), MatchError::kOk);
     MatchError error = MatchError::kOk;
     const auto replay = manager.GetReplayText(*match_id, &error);
@@ -158,6 +161,7 @@ UTEST(MatchManager, ReplayTextIsCompatibleWithStateReplay) {
     EXPECT_EQ(playback.GetMoves().back().type, durak::state::MoveType::kGrab);
     EXPECT_TRUE(playback.DoMove().has_value());
 }
+
 UTEST(Match, WinConfirmsEmptyHand) {
     Match match("m-win", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, 2, 1);
     match.session.SetPlayersCards({}, {Card{1, 6}});
@@ -172,14 +176,15 @@ UTEST(Match, WinConfirmsEmptyHand) {
     const std::size_t history_size = match.GetHistory().size();
     EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kWin}), MatchError::kOk);
     EXPECT_EQ(match.GetHistory().size(), history_size);
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{1, 6}, 0}),
-              MatchError::kMatchAlreadyFinished);
+    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{1, 6}, 0}), MatchError::kMatchAlreadyFinished);
 }
+
 UTEST(Match, WinRequiresFinishedSession) {
     Match match("m-win-early", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt, 1);
     EXPECT_EQ(match.ApplyMove(1, MoveRequest{ActionType::kWin}), MatchError::kIllegalMove);
     EXPECT_FALSE(match.IsFinished());
 }
+
 UTEST(Match, ResignFinishesMatch) {
     Match match("m-resign", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt, 1);
     EXPECT_EQ(match.Resign(1), MatchError::kOk);
@@ -192,6 +197,7 @@ UTEST(Match, ResignFinishesMatch) {
     EXPECT_EQ(match.Resign(2), MatchError::kMatchAlreadyFinished);
     EXPECT_EQ(match.Resign(999), MatchError::kMatchAlreadyFinished);
 }
+
 UTEST(Match, CraftedAttackDefenseFlow) {
     Match match("m-flow", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt, 1);
     match.session.SetPlayersCards({Card{0, 8}}, {Card{0, 9}, Card{2, 7}});
@@ -210,15 +216,14 @@ UTEST(Match, CraftedAttackDefenseFlow) {
     EXPECT_TRUE(state->table[0].empty());
     EXPECT_EQ(match.ApplyMove(1, MoveRequest{ActionType::kCard}), MatchError::kNotThisPlayersTurn);
 }
+
 UTEST(Match, IllegalDefenseRejectedWithoutHistoryRecord) {
     Match match("m-rules", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt, 1);
     match.session.SetPlayersCards({Card{0, 8}}, {Card{2, 9}});
     match.session.trump = 3;
     EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard}), MatchError::kNotThisPlayersTurn);
     EXPECT_EQ(match.ApplyMove(1, MoveRequest{ActionType::kCard, Card{0, 8}, 0}), MatchError::kOk);
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{2, 9}, 1}),
-              MatchError::kIllegalMove);
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{2, 9}, 2}),
-              MatchError::kIllegalMove);
+    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{2, 9}, 1}), MatchError::kIllegalMove);
+    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{2, 9}, 2}), MatchError::kIllegalMove);
     EXPECT_EQ(match.GetHistory().size(), 1u);
 }

@@ -17,10 +17,10 @@ LobbyController::LobbyController() {
 // Проксирует lobby-service POST /presence: открывает присутствие в лобби.
 // Тело клиента пересылается как есть, id подставляется из middleware.
 void LobbyController::OpenPresence(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-    const auto  json = req->getJsonObject();
+    const auto json = req->getJsonObject();
     Json::Value body = json ? *json : Json::Value(Json::objectValue);
-    body["id"]       = req->getAttributes()->get<int64_t>("userId");
-    auto downstream  = HttpRequest::newHttpJsonRequest(body);
+    body["id"] = req->getAttributes()->get<int64_t>("userId");
+    auto downstream = HttpRequest::newHttpJsonRequest(body);
     downstream->setMethod(drogon::Post);
     downstream->setPath("/presence");
     Forward(downstream, callback);
@@ -55,7 +55,7 @@ void LobbyController::Heartbeat(const HttpRequestPtr&, std::function<void(const 
 // параметры пересылаются как есть.
 void LobbyController::OnlinePlayers(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     std::string query;
-    const auto  excludeSelf = req->getParameter("excludeSelf");
+    const auto excludeSelf = req->getParameter("excludeSelf");
     appendQuery(query, "excludeSelf", excludeSelf.empty() ? "true" : excludeSelf);
     appendQuery(query, "id", std::to_string(req->getAttributes()->get<int64_t>("userId")));
 

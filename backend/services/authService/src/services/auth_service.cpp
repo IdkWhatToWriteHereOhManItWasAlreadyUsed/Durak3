@@ -68,7 +68,7 @@ User AuthService::loginWithGoogle(const std::string& code, const std::string& re
     }
 
     const auto token_json = userver::formats::json::FromString(token_response->body());
-    const auto id_token   = token_json["id_token"].As<std::string>("");
+    const auto id_token = token_json["id_token"].As<std::string>("");
 
     if (id_token.empty()) {
         throw userver::server::handlers::ClientError(userver::server::handlers::ExternalBody{"Google did not return id_token"});
@@ -85,10 +85,10 @@ User AuthService::loginWithGoogle(const std::string& code, const std::string& re
             userver::server::handlers::ExternalBody{"Google tokeninfo failed: " + userinfo_response->body()});
     }
 
-    const auto userinfo   = userver::formats::json::FromString(userinfo_response->body());
+    const auto userinfo = userver::formats::json::FromString(userinfo_response->body());
     const auto google_sub = userinfo["sub"].As<std::string>();
-    const auto email      = userinfo["email"].As<std::string>();
-    const auto name       = userinfo["name"].As<std::string>("");
+    const auto email = userinfo["email"].As<std::string>();
+    const auto name = userinfo["name"].As<std::string>("");
     const auto avatar_url = userinfo["picture"].As<std::string>("");
 
     const auto existing = user_repository_.findByOauthId("google", google_sub);

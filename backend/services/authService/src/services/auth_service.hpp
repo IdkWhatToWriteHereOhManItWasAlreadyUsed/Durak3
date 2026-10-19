@@ -23,12 +23,12 @@ public:
     static userver::yaml_config::Schema GetStaticConfigSchema();
 
     std::string createSession(int user_id) const;
-    void        deleteSession(const std::string& token) const;
+    void deleteSession(const std::string& token) const;
 
 private:
-    repositories::UserRepository&   user_repository_;
+    repositories::UserRepository& user_repository_;
     userver::clients::http::Client& client_;
-    std::string                     google_client_id_;
-    std::string                     google_client_secret_;
+    std::string google_client_id_;
+    std::string google_client_secret_;
 };
 }  // namespace shop::services

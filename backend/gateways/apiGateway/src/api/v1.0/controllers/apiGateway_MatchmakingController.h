@@ -31,7 +31,7 @@ private:
     void ListMatches(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback);
     void GetMatch(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, std::string matchId);
 
-    void        Forward(const HttpRequestPtr& downstream, const std::function<void(const HttpResponsePtr&)>& callback);
+    void Forward(const HttpRequestPtr& downstream, const std::function<void(const HttpResponsePtr&)>& callback);
     static void Unreachable(const std::function<void(const HttpResponsePtr&)>& callback);
 };
 }  // namespace apiGateway

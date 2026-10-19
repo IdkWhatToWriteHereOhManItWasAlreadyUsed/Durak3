@@ -7,7 +7,7 @@
 #include <userver/components/component_context.hpp>
 
 namespace shop::handlers {
-PurchaseMethodsGet::PurchaseMethodsGet(const userver::components::ComponentConfig&  config,
+PurchaseMethodsGet::PurchaseMethodsGet(const userver::components::ComponentConfig& config,
                                        const userver::components::ComponentContext& context)
     : HttpHandlerBase(config, context), service_(context.FindComponent<services::PurchaseMethodsService>()) {}
 

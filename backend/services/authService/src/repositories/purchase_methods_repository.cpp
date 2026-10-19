@@ -8,7 +8,7 @@
 #include <userver/storages/postgres/component.hpp>
 
 namespace shop::repositories {
-PurchaseMethodsRepository::PurchaseMethodsRepository(const userver::components::ComponentConfig&  config,
+PurchaseMethodsRepository::PurchaseMethodsRepository(const userver::components::ComponentConfig& config,
                                                      const userver::components::ComponentContext& context)
     : ComponentBase(config, context), pg_cluster(context.FindComponent<userver::components::Postgres>("postgres-db-1").GetCluster()) {}
 

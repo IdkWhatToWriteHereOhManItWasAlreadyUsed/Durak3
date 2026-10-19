@@ -11,11 +11,11 @@ using replayService::UserType;
 void HelloBenchmark(benchmark::State& state) {
     userver::engine::RunStandalone([&] {
         constexpr std::string_view kNames[] = {"userver", "is", "awesome", "!"};
-        std::uint64_t              i        = 0;
+        std::uint64_t i = 0;
 
         for (auto _ : state) {
-            const auto name   = kNames[i++ % std::size(kNames)];
-            auto       result = replayService::SayHelloTo(name, UserType::kFirstTime);
+            const auto name = kNames[i++ % std::size(kNames)];
+            auto result = replayService::SayHelloTo(name, UserType::kFirstTime);
             benchmark::DoNotOptimize(result);
         }
     });

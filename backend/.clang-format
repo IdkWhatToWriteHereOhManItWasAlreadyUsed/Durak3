@@ -27,8 +27,6 @@ IncludeBlocks: Regroup
 
 SpaceAfterTemplateKeyword: true      # template <typename T>
 BreakTemplateDeclarations: Yes       # template<...> на отдельной строке
-AlignConsecutiveAssignments: Consecutive   # выравнивать = в соседних строках
-AlignConsecutiveDeclarations: Consecutive  # выравнивать имена переменных
 AllowShortEnumsOnASingleLine: false
 BinPackParameters: false             # длинные параметры: каждый на своей строке
 InsertBraces: true                   # сам добавит {} к if/for без скобок

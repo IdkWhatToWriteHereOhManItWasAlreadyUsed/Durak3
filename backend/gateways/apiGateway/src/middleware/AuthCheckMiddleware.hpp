@@ -15,8 +15,8 @@ using namespace drogon;
 class AuthCheckMiddleware : public HttpMiddleware<AuthCheckMiddleware> {
 private:
     static constexpr std::size_t TOKEN_HEADER_OFFSET = 7;
-    HttpClientPtr                m_authServiceClient = nullptr;
-    bool                         m_isEnabled;
+    HttpClientPtr m_authServiceClient = nullptr;
+    bool m_isEnabled;
 public:
     AuthCheckMiddleware() {
         auto envValue = std::getenv("OAUTH_TOKEN_CHECK_ENABLED");
@@ -25,7 +25,7 @@ public:
             m_isEnabled = false;
             LOG_INFO << "Auth middleware was not enabled!";
         } else {
-            m_isEnabled         = true;
+            m_isEnabled = true;
             m_authServiceClient = HttpClient::newHttpClient(app().getCustomConfig()["auth"].asString());
             LOG_INFO << "Auth middleware launched";
         }

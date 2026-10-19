@@ -14,7 +14,7 @@ struct HandlerTag;
 
 class View final {
 public:
-    using Deps           = USERVER_NAMESPACE::chaotic::openapi::server::dependencies::ForHandler<HandlerTag>;
+    using Deps = USERVER_NAMESPACE::chaotic::openapi::server::dependencies::ForHandler<HandlerTag>;
     using RequestContext = USERVER_NAMESPACE::server::request::RequestContext;
 
     static Response Handle(Request&& request, Deps&& deps, RequestContext& context);

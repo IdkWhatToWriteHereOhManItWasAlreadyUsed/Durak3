@@ -16,7 +16,7 @@ ReplayController::ReplayController() {
 // Query-параметры (id, limit, offset) пересылаются как есть.
 void ReplayController::ListReplays(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     std::string query;
-    const auto  id = req->getParameter("id");
+    const auto id = req->getParameter("id");
     if (!id.empty()) {
         appendQuery(query, "id", id);
     }
@@ -47,11 +47,11 @@ void ReplayController::GetReplay(const HttpRequestPtr&, std::function<void(const
 
 // Проксирует replay-service GET /replays/{replayId}/frames: кадры повтора.
 // Query-параметры (from, to) пересылаются как есть.
-void ReplayController::GetReplayFrames(const HttpRequestPtr&                         req,
+void ReplayController::GetReplayFrames(const HttpRequestPtr& req,
                                        std::function<void(const HttpResponsePtr&)>&& callback,
-                                       std::string                                   replayId) {
+                                       std::string replayId) {
     std::string query;
-    const auto  from = req->getParameter("from");
+    const auto from = req->getParameter("from");
     if (!from.empty()) {
         appendQuery(query, "from", from);
     }

@@ -22,10 +22,10 @@ std::string AppleAuthHandler::HandleRequestThrow(const userver::server::http::Ht
     const auto authToken = auth_service_.createSession(response.id);
 
     userver::formats::json::ValueBuilder resp;
-    resp["id"]          = response.id;
-    resp["email"]       = response.email;
-    resp["username"]    = response.username;
-    resp["avatar_url"]  = response.avatar_url;
+    resp["id"] = response.id;
+    resp["email"] = response.email;
+    resp["username"] = response.username;
+    resp["avatar_url"] = response.avatar_url;
     resp["accessToken"] = authToken;
     return userver::formats::json::ToString(resp.ExtractValue());
 }

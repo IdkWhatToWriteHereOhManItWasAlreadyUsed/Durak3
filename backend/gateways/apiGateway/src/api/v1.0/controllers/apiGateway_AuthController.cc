@@ -53,8 +53,8 @@ void AuthController::UserById(const HttpRequestPtr& req, std::function<void(cons
 // Отправляет downstream-запрос в auth-service и пробрасывает ответ клиенту.
 // В отличие от domain-сервисов, заголовок Authorization здесь нужен
 // (auth-service сам валидирует opaque-токен).
-void AuthController::Forward(const HttpRequestPtr&                              req,
-                             const HttpRequestPtr&                              downstream,
+void AuthController::Forward(const HttpRequestPtr& req,
+                             const HttpRequestPtr& downstream,
                              const std::function<void(const HttpResponsePtr&)>& callback) {
     const auto& authHeader = req->getHeader("Authorization");
     if (!authHeader.empty()) {

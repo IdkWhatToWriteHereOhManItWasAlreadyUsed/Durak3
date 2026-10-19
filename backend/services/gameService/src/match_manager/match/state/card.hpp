@@ -17,4 +17,4 @@ inline std::string CardToString(const Card& card) {
     return std::to_string(card.suit) + "," + std::to_string(card.power) + ";";
 }
 
-}
+}  // namespace durak

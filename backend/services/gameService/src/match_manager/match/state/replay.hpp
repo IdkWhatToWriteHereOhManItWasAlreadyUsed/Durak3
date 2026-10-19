@@ -3,7 +3,9 @@
 #include <optional>
 #include <string>
 #include <vector>
+
 #include "game_session.hpp"
+
 namespace durak::state {
 struct MoveSnapshot {
     std::array<std::vector<Card>, GameSession::kPlayersCount> player_cards;
@@ -11,13 +13,18 @@ struct MoveSnapshot {
     std::vector<Card> deck;
     std::string message;
 };
+
 class Replay {
 public:
     explicit Replay(GameSession& session);
     void SetReplayData(const std::string& replay_text);
+
     const std::string& GetPlayer0Name() const { return player0_name_; }
+
     const std::string& GetPlayer1Name() const { return player1_name_; }
+
     const std::vector<Move>& GetMoves() const { return moves_; }
+
     std::optional<std::string> DoMove();
     std::optional<std::string> UndoMove();
     static std::string GetCardName(const Card& card);
@@ -29,4 +36,4 @@ private:
     std::string player0_name_;
     std::string player1_name_;
 };
-}
+}  // namespace durak::state

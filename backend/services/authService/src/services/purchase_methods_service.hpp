@@ -17,8 +17,8 @@ public:
     PurchaseMethodsService(const userver::components::ComponentConfig& config, const userver::components::ComponentContext& context);
 
     std::vector<PurchaseMethod> getByUserId(int user_id);
-    PurchaseMethod              create(int user_id, const std::string& type, const std::string& details);
-    void                        deleteById(int id, int user_id);
+    PurchaseMethod create(int user_id, const std::string& type, const std::string& details);
+    void deleteById(int id, int user_id);
 
 private:
     repositories::PurchaseMethodsRepository& repository_;

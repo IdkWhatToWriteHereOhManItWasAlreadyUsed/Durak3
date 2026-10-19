@@ -2,10 +2,16 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+
 #include "state/card.hpp"
 
 namespace durak::match {
-enum class ActionType { kCard, kTransfer, kGrab, kWin };
+enum class ActionType {
+    kCard,
+    kTransfer,
+    kGrab,
+    kWin
+};
 
 struct MatchMove {
     std::uint64_t sequence = 0;
@@ -16,4 +22,4 @@ struct MatchMove {
     std::optional<int> card_num;
     std::chrono::system_clock::time_point at = std::chrono::system_clock::now();
 };
-}
+}  // namespace durak::match

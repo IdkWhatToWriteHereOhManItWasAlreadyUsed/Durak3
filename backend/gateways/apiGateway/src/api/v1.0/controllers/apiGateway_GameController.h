@@ -27,7 +27,7 @@ private:
     void Resign(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, std::string gameId);
     void GetGameResult(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, std::string gameId);
 
-    void        Forward(const HttpRequestPtr& downstream, const std::function<void(const HttpResponsePtr&)>& callback);
+    void Forward(const HttpRequestPtr& downstream, const std::function<void(const HttpResponsePtr&)>& callback);
     static void Unreachable(const std::function<void(const HttpResponsePtr&)>& callback);
 };
 }  // namespace apiGateway

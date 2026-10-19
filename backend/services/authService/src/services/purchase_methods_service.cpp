@@ -6,7 +6,7 @@
 
 #include <userver/components/component_context.hpp>
 
-shop::services::PurchaseMethodsService::PurchaseMethodsService(const userver::components::ComponentConfig&  config,
+shop::services::PurchaseMethodsService::PurchaseMethodsService(const userver::components::ComponentConfig& config,
                                                                const userver::components::ComponentContext& context)
     : ComponentBase(config, context), repository_(context.FindComponent<repositories::PurchaseMethodsRepository>()) {}
 

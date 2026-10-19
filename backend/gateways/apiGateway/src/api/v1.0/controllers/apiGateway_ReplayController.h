@@ -20,7 +20,7 @@ private:
     void GetReplay(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, std::string replayId);
     void GetReplayFrames(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback, std::string replayId);
 
-    void        Forward(const HttpRequestPtr& downstream, const std::function<void(const HttpResponsePtr&)>& callback);
+    void Forward(const HttpRequestPtr& downstream, const std::function<void(const HttpResponsePtr&)>& callback);
     static void Unreachable(const std::function<void(const HttpResponsePtr&)>& callback);
 };
 }  // namespace apiGateway
