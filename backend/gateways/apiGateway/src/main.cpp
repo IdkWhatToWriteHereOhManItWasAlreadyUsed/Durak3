@@ -15,16 +15,11 @@
 int main() {
     drogon::app().loadConfigFile("config/app/config.json");
 
-    drogon::app().registerController(
-        std::make_shared<apiGateway::AuthController>());
-    drogon::app().registerController(
-        std::make_shared<apiGateway::LobbyController>());
-    drogon::app().registerController(
-        std::make_shared<apiGateway::MatchmakingController>());
-    drogon::app().registerController(
-        std::make_shared<apiGateway::GameController>());
-    drogon::app().registerController(
-        std::make_shared<apiGateway::ReplayController>());
+    drogon::app().registerController(std::make_shared<apiGateway::AuthController>());
+    drogon::app().registerController(std::make_shared<apiGateway::LobbyController>());
+    drogon::app().registerController(std::make_shared<apiGateway::MatchmakingController>());
+    drogon::app().registerController(std::make_shared<apiGateway::GameController>());
+    drogon::app().registerController(std::make_shared<apiGateway::ReplayController>());
 
     drogon::app().run();
     return 0;

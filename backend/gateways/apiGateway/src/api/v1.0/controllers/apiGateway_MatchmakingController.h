@@ -7,8 +7,7 @@
 using namespace drogon;
 
 namespace apiGateway {
-class MatchmakingController
-    : public drogon::HttpController<MatchmakingController, false> {
+class MatchmakingController : public drogon::HttpController<MatchmakingController, false> {
     HttpClientPtr client_ = nullptr;
 public:
     explicit MatchmakingController();
@@ -21,9 +20,7 @@ public:
                   "/api/invites",
                   drogon::Get,
                   "apiGateway::AuthCheckMiddleware");
-    ADD_METHOD_TO(MatchmakingController::GetInvite,
-                  "/api/invites/{inviteId}",
-                  drogon::Get);
+    ADD_METHOD_TO(MatchmakingController::GetInvite, "/api/invites/{inviteId}", drogon::Get);
     ADD_METHOD_TO(MatchmakingController::AcceptInvite,
                   "/api/invites/{inviteId}/accept",
                   drogon::Post,
@@ -40,9 +37,7 @@ public:
                   "/api/matches",
                   drogon::Get,
                   "apiGateway::AuthCheckMiddleware");
-    ADD_METHOD_TO(MatchmakingController::GetMatch,
-                  "/api/matches/{matchId}",
-                  drogon::Get);
+    ADD_METHOD_TO(MatchmakingController::GetMatch, "/api/matches/{matchId}", drogon::Get);
     METHOD_LIST_END
 private:
     void CreateInvite(const HttpRequestPtr&                         req,
@@ -67,9 +62,8 @@ private:
                   std::function<void(const HttpResponsePtr&)>&& callback,
                   std::string                                   matchId);
 
-    void Forward(const HttpRequestPtr&                              downstream,
-                 const std::function<void(const HttpResponsePtr&)>& callback);
-    static void Unreachable(
-        const std::function<void(const HttpResponsePtr&)>& callback);
+    void        Forward(const HttpRequestPtr&                              downstream,
+                        const std::function<void(const HttpResponsePtr&)>& callback);
+    static void Unreachable(const std::function<void(const HttpResponsePtr&)>& callback);
 };
 }  // namespace apiGateway

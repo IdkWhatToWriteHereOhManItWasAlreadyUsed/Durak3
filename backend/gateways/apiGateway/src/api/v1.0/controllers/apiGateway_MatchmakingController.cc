@@ -5,25 +5,20 @@
 using namespace apiGateway;
 
 namespace {
-void appendQuery(std::string&       query,
-                 const std::string& key,
-                 const std::string& value) {
-    query += (query.empty() ? "?" : "&") + key + "=" +
-             drogon::utils::urlEncodeComponent(value);
+void appendQuery(std::string& query, const std::string& key, const std::string& value) {
+    query += (query.empty() ? "?" : "&") + key + "=" + drogon::utils::urlEncodeComponent(value);
 }
 }  // namespace
 
 MatchmakingController::MatchmakingController() {
-    client_ = HttpClient::newHttpClient(
-        app().getCustomConfig()["matchmaking"].asString());
+    client_ = HttpClient::newHttpClient(app().getCustomConfig()["matchmaking"].asString());
 }
 
 // Проксирует matchmaking-service POST /invites: приглашает игрока (`GO?`).
 // Тело клиента (toId, ttlSeconds) пересылается как есть, fromId
 // подставляется из middleware (клиентское значение игнорируется).
-void MatchmakingController::CreateInvite(
-    const HttpRequestPtr&                         req,
-    std::function<void(const HttpResponsePtr&)>&& callback) {
+void MatchmakingController::CreateInvite(const HttpRequestPtr&                         req,
+                                         std::function<void(const HttpResponsePtr&)>&& callback) {
     const auto  json = req->getJsonObject();
     Json::Value body = json ? *json : Json::Value(Json::objectValue);
     body["fromId"]   = req->getAttributes()->get<int64_t>("userId");
@@ -35,12 +30,10 @@ void MatchmakingController::CreateInvite(
 
 // Проксирует matchmaking-service GET /invites: список приглашений игрока.
 // id (чьи приглашения) подставляется из middleware.
-void MatchmakingController::ListInvites(
-    const HttpRequestPtr&                         req,
-    std::function<void(const HttpResponsePtr&)>&& callback) {
+void MatchmakingController::ListInvites(const HttpRequestPtr&                         req,
+                                        std::function<void(const HttpResponsePtr&)>&& callback) {
     std::string query;
-    appendQuery(query, "id",
-                std::to_string(req->getAttributes()->get<int64_t>("userId")));
+    appendQuery(query, "id", std::to_string(req->getAttributes()->get<int64_t>("userId")));
 
     const auto direction = req->getParameter("direction");
     if (!direction.empty()) {
@@ -59,10 +52,9 @@ void MatchmakingController::ListInvites(
 }
 
 // Проксирует matchmaking-service GET /invites/{inviteId}: получить приглашение.
-void MatchmakingController::GetInvite(
-    const HttpRequestPtr&,
-    std::function<void(const HttpResponsePtr&)>&& callback,
-    std::string                                   inviteId) {
+void MatchmakingController::GetInvite(const HttpRequestPtr&,
+                                      std::function<void(const HttpResponsePtr&)>&& callback,
+                                      std::string                                   inviteId) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Get);
     downstream->setPath("/invites/" + inviteId);
@@ -72,10 +64,9 @@ void MatchmakingController::GetInvite(
 // Проксирует matchmaking-service POST /invites/{inviteId}/accept: принять
 // приглашение (`GO!`, создает матч и партию). Тело формируется гейтвеем:
 // id принимающего подставляется из middleware.
-void MatchmakingController::AcceptInvite(
-    const HttpRequestPtr&                         req,
-    std::function<void(const HttpResponsePtr&)>&& callback,
-    std::string                                   inviteId) {
+void MatchmakingController::AcceptInvite(const HttpRequestPtr&                         req,
+                                         std::function<void(const HttpResponsePtr&)>&& callback,
+                                         std::string                                   inviteId) {
     Json::Value body(Json::objectValue);
     body["id"] = req->getAttributes()->get<int64_t>("userId");
 
@@ -87,10 +78,9 @@ void MatchmakingController::AcceptInvite(
 
 // Проксирует matchmaking-service POST /invites/{inviteId}/decline:
 // отклонить приглашение (`NO!`). id отклоняющего подставляется из middleware.
-void MatchmakingController::DeclineInvite(
-    const HttpRequestPtr&                         req,
-    std::function<void(const HttpResponsePtr&)>&& callback,
-    std::string                                   inviteId) {
+void MatchmakingController::DeclineInvite(const HttpRequestPtr&                         req,
+                                          std::function<void(const HttpResponsePtr&)>&& callback,
+                                          std::string                                   inviteId) {
     Json::Value body(Json::objectValue);
     body["id"] = req->getAttributes()->get<int64_t>("userId");
 
@@ -102,10 +92,9 @@ void MatchmakingController::DeclineInvite(
 
 // Проксирует matchmaking-service POST /invites/{inviteId}/cancel:
 // отменить своё приглашение. id отменяющего подставляется из middleware.
-void MatchmakingController::CancelInvite(
-    const HttpRequestPtr&                         req,
-    std::function<void(const HttpResponsePtr&)>&& callback,
-    std::string                                   inviteId) {
+void MatchmakingController::CancelInvite(const HttpRequestPtr&                         req,
+                                         std::function<void(const HttpResponsePtr&)>&& callback,
+                                         std::string                                   inviteId) {
     Json::Value body(Json::objectValue);
     body["id"] = req->getAttributes()->get<int64_t>("userId");
 
@@ -117,12 +106,10 @@ void MatchmakingController::CancelInvite(
 
 // Проксирует matchmaking-service GET /matches: список матчей игрока.
 // id (чьи матчи) подставляется из middleware.
-void MatchmakingController::ListMatches(
-    const HttpRequestPtr&                         req,
-    std::function<void(const HttpResponsePtr&)>&& callback) {
+void MatchmakingController::ListMatches(const HttpRequestPtr&                         req,
+                                        std::function<void(const HttpResponsePtr&)>&& callback) {
     std::string query;
-    appendQuery(query, "id",
-                std::to_string(req->getAttributes()->get<int64_t>("userId")));
+    appendQuery(query, "id", std::to_string(req->getAttributes()->get<int64_t>("userId")));
 
     const auto status = req->getParameter("status");
     if (!status.empty()) {
@@ -136,10 +123,9 @@ void MatchmakingController::ListMatches(
 }
 
 // Проксирует matchmaking-service GET /matches/{matchId}: получить матч.
-void MatchmakingController::GetMatch(
-    const HttpRequestPtr&,
-    std::function<void(const HttpResponsePtr&)>&& callback,
-    std::string                                   matchId) {
+void MatchmakingController::GetMatch(const HttpRequestPtr&,
+                                     std::function<void(const HttpResponsePtr&)>&& callback,
+                                     std::string                                   matchId) {
     auto downstream = HttpRequest::newHttpRequest();
     downstream->setMethod(drogon::Get);
     downstream->setPath("/matches/" + matchId);
@@ -148,9 +134,8 @@ void MatchmakingController::GetMatch(
 
 // Отправляет downstream-запрос в matchmaking-service и пробрасывает ответ
 // клиенту.
-void MatchmakingController::Forward(
-    const HttpRequestPtr&                              downstream,
-    const std::function<void(const HttpResponsePtr&)>& callback) {
+void MatchmakingController::Forward(const HttpRequestPtr&                              downstream,
+                                    const std::function<void(const HttpResponsePtr&)>& callback) {
     auto client = client_;
     client->sendRequest(
         downstream,

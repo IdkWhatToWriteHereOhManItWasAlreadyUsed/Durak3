@@ -40,12 +40,10 @@ private:
     void OnlinePlayers(const HttpRequestPtr&                         req,
                        std::function<void(const HttpResponsePtr&)>&& callback);
 
-    void Forward(const HttpRequestPtr&                              downstream,
-                 const std::function<void(const HttpResponsePtr&)>& callback);
-    static void BadRequest(
-        const std::function<void(const HttpResponsePtr&)>& callback,
-        const std::string&                                 message);
-    static void Unreachable(
-        const std::function<void(const HttpResponsePtr&)>& callback);
+    void        Forward(const HttpRequestPtr&                              downstream,
+                        const std::function<void(const HttpResponsePtr&)>& callback);
+    static void BadRequest(const std::function<void(const HttpResponsePtr&)>& callback,
+                           const std::string&                                 message);
+    static void Unreachable(const std::function<void(const HttpResponsePtr&)>& callback);
 };
 }  // namespace apiGateway

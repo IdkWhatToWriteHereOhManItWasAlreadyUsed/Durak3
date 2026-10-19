@@ -21,16 +21,12 @@ public:
                   "/api/games/{gameId}/moves",
                   drogon::Post,
                   "apiGateway::AuthCheckMiddleware");
-    ADD_METHOD_TO(GameController::GetMoveHistory,
-                  "/api/games/{gameId}/moves/history",
-                  drogon::Get);
+    ADD_METHOD_TO(GameController::GetMoveHistory, "/api/games/{gameId}/moves/history", drogon::Get);
     ADD_METHOD_TO(GameController::Resign,
                   "/api/games/{gameId}/resign",
                   drogon::Post,
                   "apiGateway::AuthCheckMiddleware");
-    ADD_METHOD_TO(GameController::GetGameResult,
-                  "/api/games/{gameId}/result",
-                  drogon::Get);
+    ADD_METHOD_TO(GameController::GetGameResult, "/api/games/{gameId}/result", drogon::Get);
     METHOD_LIST_END
 private:
     void GetGame(const HttpRequestPtr&                         req,
@@ -52,9 +48,8 @@ private:
                        std::function<void(const HttpResponsePtr&)>&& callback,
                        std::string                                   gameId);
 
-    void Forward(const HttpRequestPtr&                              downstream,
-                 const std::function<void(const HttpResponsePtr&)>& callback);
-    static void Unreachable(
-        const std::function<void(const HttpResponsePtr&)>& callback);
+    void        Forward(const HttpRequestPtr&                              downstream,
+                        const std::function<void(const HttpResponsePtr&)>& callback);
+    static void Unreachable(const std::function<void(const HttpResponsePtr&)>& callback);
 };
 }  // namespace apiGateway
