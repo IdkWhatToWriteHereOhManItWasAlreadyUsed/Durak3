@@ -72,16 +72,15 @@ Response View::Handle(Request&& request, Deps&& deps, RequestContext& /*context*
         common::TryPublish(redis_client, common::kChannelGameMove, common::BuildMoveEvent(game_id, applied, match_finished));
 
         if (match_finished) {
-            durak::match::MatchError result_error = durak::match::MatchError::kOk;
-            const auto result = match_manager.GetMatchResult(request.gameId, &result_error);
-            if (result) {
+            auto result_error = durak::match::MatchError::kOk;
+            if (const auto result = match_manager.GetMatchResult(request.gameId, &result_error)) {
                 common::TryPublish(redis_client, common::kChannelGameFinished, common::BuildFinishedEvent(game_id, *result));
             }
         }
     }
 
     // Новое состояние в терминах игрока, который сделал ход.
-    durak::match::MatchError state_error = durak::match::MatchError::kOk;
+    auto state_error = durak::match::MatchError::kOk;
     const auto state = match_manager.GetMatchState(request.gameId, player_id, &state_error);
     if (!state) {
         if (state_error == durak::match::MatchError::kMatchNotFound) {

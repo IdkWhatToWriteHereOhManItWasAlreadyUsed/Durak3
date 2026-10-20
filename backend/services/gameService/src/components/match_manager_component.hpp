@@ -21,7 +21,7 @@ public:
 
     durak::match::MatchManager& GetManager() noexcept { return match_manager_; }
 private:
-    durak::match::MatchManager match_manager_;
+    durak::match::MatchManager match_manager_ {};
 };
 
 inline constexpr userver::chaotic::openapi::server::dependencies::FactoryTag<MatchManagerComponent&> kMatchManagerComponent{};
