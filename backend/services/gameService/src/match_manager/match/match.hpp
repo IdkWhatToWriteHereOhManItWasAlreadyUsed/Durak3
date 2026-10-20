@@ -110,6 +110,7 @@ private:
     void Record(ActionType type, std::int64_t player_id, std::optional<Card> card, std::optional<int> stack, std::optional<int> card_num);
     void FinishMatch(FinishReason reason, int winner_seat);
     void BuildReplayHeader();
+    std::vector<PlayerPublic> BuildPlayersView() const;
     std::string id_;
     std::vector<Player> players_;
     MatchStatus status_ = MatchStatus::kActive;

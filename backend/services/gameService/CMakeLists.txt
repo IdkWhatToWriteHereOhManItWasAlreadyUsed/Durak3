@@ -74,7 +74,7 @@ target_link_libraries(${PROJECT_NAME}_engine_test PRIVATE durak_state userver::u
 
 # Match unit tests (Match + MatchManager)
 add_executable(${PROJECT_NAME}_games_test src/match_manager/match_test.cpp)
-target_link_libraries(${PROJECT_NAME}_games_test PRIVATE durak_match userver::utest)
+target_link_libraries(${PROJECT_NAME}_games_test PRIVATE match_manager userver::utest)
 
 include(CTest)
 add_test(NAME ${PROJECT_NAME}_engine_test COMMAND ${PROJECT_NAME}_engine_test)

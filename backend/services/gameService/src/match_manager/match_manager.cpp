@@ -38,6 +38,7 @@ MatchError MatchManager::ApplyMove(const std::string& match_id, std::int64_t pla
         return MatchError::kMatchNotFound;
     }
     const MatchError error = found->second->ApplyMove(player_id, move);
+
     if (error == MatchError::kOk && applied != nullptr && !found->second->GetHistory().empty()) {
         *applied = found->second->GetHistory().back();
     }

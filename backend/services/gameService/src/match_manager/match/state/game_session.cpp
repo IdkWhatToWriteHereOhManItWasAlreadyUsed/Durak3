@@ -24,7 +24,7 @@ void GameSession::InitializeDeck(unsigned seed) {
         }
     }
     std::mt19937 rng(seed);
-    std::shuffle(cards.begin(), cards.end(), rng);
+    std::ranges::shuffle(cards, rng);
     deck = std::move(cards);
     GiveCards();
 }
@@ -88,8 +88,7 @@ bool GameSession::CanPush(const Card& card, int stack_index) const {
 
 void GameSession::DoMove(const Card& card, int stack_index) {
     auto& hand = player_cards[curr_player_move];
-    auto it = std::find(hand.begin(), hand.end(), card);
-    if (it != hand.end()) {
+    if (auto it = std::ranges::find(hand, card); it != hand.end()) {
         hand.erase(it);
     }
     game_stack[stack_index].push_back(card);
@@ -109,7 +108,7 @@ void GameSession::UndoGrab() {
 }
 
 void GameSession::GiveCardsAfterDefense() {
-    for (int i = 0; i < 12; ++i) {
+    for (int i = 0; i < kStartCards * kPlayersCount; ++i) {
         if (!deck.empty() && player_cards[curr_player_move].size() < kStartCards) {
             player_cards[curr_player_move].push_back(deck.back());
             deck.pop_back();
@@ -125,7 +124,7 @@ void GameSession::GiveCardsAfterDefense() {
 }
 
 void GameSession::UndoGiveCardsAfterDefense() {
-    for (int i = 0; i < 12; ++i) {
+    for (int i = 0; i < kStartCards * kPlayersCount; ++i) {
         if (!deck.empty() && player_cards[curr_player_move].size() < kStartCards) {
             player_cards[curr_player_move].push_back(deck.back());
             deck.pop_back();

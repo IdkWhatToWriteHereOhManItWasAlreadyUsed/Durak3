@@ -54,7 +54,7 @@ void Match::FinishMatch(FinishReason reason, int winner_seat) {
     loser_id_ = players_[1 - winner_seat].id;
 }
 
-MatchError Match::ApplyMove(std::int64_t player_id, const MoveRequest& move) {
+MatchError Match::ApplyMove(const std::int64_t player_id, const MoveRequest& move) {
     if (status_ == MatchStatus::kFinished) {
         if (move.type == ActionType::kWin) {
             return MatchError::kOk;
@@ -259,7 +259,7 @@ std::string Match::GetReplayText() const {
         text += "-\n";
         switch (move.type) {
             case ActionType::kCard:
-                text += "CARD:" + std::to_string(move.card_num.value_or(-1)) + ";STACK:" + std::to_string(move.stack.value_or(-1)) + "\n";
+                text += "CARD:" + std::to_string(move.card_num.value_or(-1)) + ";STACK:" + std::to_string(move.stack.value_or(-1)) + ";\n";
                 break;
             case ActionType::kTransfer:
                 text += "MOVE\n";

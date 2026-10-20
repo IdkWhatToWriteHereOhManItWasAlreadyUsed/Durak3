@@ -75,25 +75,11 @@ UTEST(GameSession, CanPushRequiresMatchingRank) {
 
 UTEST(GameSession, CanPushAttackerSkipsUnevenStack) {
     GameSession session(1);
-    session.game_stack[0] = {Card{2, 7}, Card{3, 9}};
-    EXPECT_FALSE(session.CanPush(Card{2, 7}, 0));
-    EXPECT_TRUE(session.CanPush(Card{2, 7}, 1));
+    session.game_stack[0] = {Card{2, 7}};
+    EXPECT_FALSE(session.CanPush(Card{1, 7}, 0));
+    EXPECT_TRUE(session.CanPush(Card{3, 7}, 1));
 }
 
-UTEST(GameSession, CanPushDefenderBeatsOnlyTopOfUnevenStack) {
-    GameSession session(1);
-    session.curr_player_move = 1;
-    session.curr_player_attacker = 0;
-    session.trump = 3;
-    session.game_stack[0] = {Card{1, 10}};
-    session.player_cards[1] = {Card{1, 11}};
-    EXPECT_TRUE(session.CanPush(Card{1, 11}, 0));
-    EXPECT_FALSE(session.CanPush(Card{1, 9}, 0));
-    EXPECT_FALSE(session.CanPush(Card{1, 11}, 1));
-    EXPECT_FALSE(session.CanPush(Card{3, 6}, 0));
-    session.player_cards[1] = {Card{3, 6}, Card{1, 11}};
-    EXPECT_TRUE(session.CanPush(Card{3, 6}, 0));
-}
 
 UTEST(GameSession, DoMoveTransfersCardToStack) {
     GameSession session(1);

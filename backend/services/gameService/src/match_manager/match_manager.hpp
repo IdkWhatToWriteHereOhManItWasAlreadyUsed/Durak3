@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "match/match.hpp"
-#include "match/match_interface.hpp"
+#include "i_match_manager.hpp"
 
 namespace durak::match {
 class MatchManager final : public IMatchManager {

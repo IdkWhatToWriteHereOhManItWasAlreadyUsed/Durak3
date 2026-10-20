@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "match.hpp"
+#include "match/match.hpp"
 
 namespace durak::match {
 class IMatchManager {

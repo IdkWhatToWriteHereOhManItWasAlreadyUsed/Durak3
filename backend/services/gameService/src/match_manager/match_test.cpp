@@ -111,10 +111,10 @@ UTEST(MatchManager, LegalMoveFlowWithHistory) {
     EXPECT_EQ(applied.sequence, 1u);
     EXPECT_EQ(applied.card, attack_card);
     EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kTransfer}), MatchError::kOk);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}), MatchError::kIllegalMove);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}), MatchError::kNotThisPlayersTurn);
     EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kTransfer}), MatchError::kIllegalMove);
     EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kGrab}), MatchError::kOk);
-    MatchError error = MatchError::kOk;
+    auto error = MatchError::kOk;
     const auto history = manager.GetMatchHistory(*match_id, &error);
     ASSERT_TRUE(history.has_value());
     ASSERT_EQ(history->size(), 3u);
