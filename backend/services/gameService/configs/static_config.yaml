@@ -64,9 +64,9 @@ components_manager:
               sentinel_thread_pool_size: 1
 
         default-secdist-provider:
-            config: /etc/redis_service/secure_data.json  # Values are supposed to be stored in this file
-            missing-ok: true  # ... but if the file is missing it is still ok
-            environment-secrets-key: SECDIST_CONFIG  # ... values will be loaded from this environment value
+            config: secrets/secure_data.json        # Values are supposed to be stored in this file ...
+            missing-ok: true                        # ... but if the file is missing it is still ok ...
+            environment-secrets-key: SECDIST_CONFIG # ... values will be loaded from this environment value
 
 
 

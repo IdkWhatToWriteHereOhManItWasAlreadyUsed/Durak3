@@ -6,18 +6,17 @@
 #include <userver/storages/redis/client.hpp>
 #include <userver/storages/redis/component.hpp>
 
-using namespace userver;
-
-class RedisClientComponent final : public components::ComponentBase {
+class RedisClientComponent final : public userver::components::ComponentBase {
 public:
     static constexpr std::string_view kName = "redis-client-component";
 
-    RedisClientComponent(const components::ComponentConfig& config, const components::ComponentContext& context)
-                      : ComponentBase(config, context),
-                      redisClient_(context.FindComponent<components::Redis>("redis-component-1")
+    RedisClientComponent(const userver::components::ComponentConfig& config,
+                         const userver::components::ComponentContext& context)
+                      :  ComponentBase(config, context)
+                      ,  redisClient_(context.FindComponent<userver::components::Redis>("redis-component-1")
                       .GetClient("redis-client-1")) {
-        using chaotic::openapi::server::dependencies::Factories;
-        using components::Container;
+        using userver::chaotic::openapi::server::dependencies::Factories;
+        using userver::components::Container;
         /*
          *надо придумать имя клиенту редиса
          *вот у нас есть компонент наш редис клаент компонент вот этот класс
@@ -35,9 +34,9 @@ public:
         );
     }
 
-    storages::redis::ClientPtr GetRedisClient() noexcept { return redisClient_; }
+    userver::storages::redis::ClientPtr GetRedisClient() noexcept { return redisClient_; }
 private:
-    storages::redis::ClientPtr redisClient_;
+    userver::storages::redis::ClientPtr redisClient_;
 };
 
-inline constexpr chaotic::openapi::server::dependencies::FactoryTag<RedisClientComponent&> kRedisClientComponent{};
+inline constexpr userver::chaotic::openapi::server::dependencies::FactoryTag<RedisClientComponent&> kRedisClientComponent{};
