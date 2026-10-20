@@ -10,9 +10,15 @@
 #include <userver/storages/secdist/component.hpp>
 #include <userver/storages/secdist/provider_component.hpp>
 #include <userver/utils/daemon_run.hpp>
+#include <userver/testsuite/testsuite_support.hpp>
 
 #include "components/match_manager_component.hpp"
 #include "components/redis_client_component.hpp"
+
+namespace userver::v3_3_rc::components
+{
+    class TestsuiteSupport;
+}
 
 int main(int argc, char* argv[]) {
     using Dependencies = userver::chaotic::openapi::server::dependencies::Factories;
@@ -27,6 +33,7 @@ int main(int argc, char* argv[]) {
                             .Append<MatchManagerComponent>()
                             .Append<userver::components::Secdist>()
                             .Append<userver::components::DefaultSecdistProvider>()
+                            .Append<userver::components::TestsuiteSupport>()
                             .Append<userver::components::Redis>("redis-component-1")
                             .Append<RedisClientComponent>();
 

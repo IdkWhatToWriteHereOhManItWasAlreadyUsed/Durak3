@@ -33,13 +33,13 @@ components_manager:
                     network_timeout_ms: 750
                     statement_timeout_ms: 500
 
-        testsuite-support: {}
+        #testsuite-support: {}
 
         congestion-control:
 
         http-client:
         http-client-core:
-            load-enabled: $is-testing
+            load-enabled: true
             fs-task-processor: fs-task-processor
 
         dns-client:
@@ -51,6 +51,13 @@ components_manager:
             task_processor: main-task-processor
             throttling_enabled: false
             url_trailing_slash: strict-match
+
+        match-manager-component:
+
+        testsuite-support:
+            load-enabled: true
+
+        redis-client-component:
 
         redis-component-1:
             groups:

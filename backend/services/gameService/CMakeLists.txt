@@ -87,7 +87,7 @@ add_test(NAME ${PROJECT_NAME}_games_test COMMAND ${PROJECT_NAME}_games_test)
 #add_google_benchmark_tests(${PROJECT_NAME}_benchmark)
 
 # Functional testing
-#userver_testsuite_add_simple()
+userver_testsuite_add_simple()
 
 # Install
 include(GNUInstallDirs)
