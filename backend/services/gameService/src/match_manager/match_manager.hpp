@@ -6,8 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "match/match.hpp"
 #include "i_match_manager.hpp"
+#include "match/match.hpp"
 
 namespace durak::match {
 class MatchManager final : public IMatchManager {
@@ -16,17 +16,11 @@ public:
 
     explicit MatchManager(unsigned seed) : seed_(seed) {}
 
-    std::optional<std::string> CreateMatch(std::vector<Player> players,
-                                           std::optional<std::int64_t> first_attacker_id) override;
-    MatchError ApplyMove(const std::string& match_id,
-                         std::int64_t player_id,
-                         const MoveRequest& move,
-                         MatchMove* applied) override;
+    std::optional<std::string> CreateMatch(std::vector<Player> players, std::optional<std::int64_t> first_attacker_id) override;
+    MatchError ApplyMove(const std::string& match_id, std::int64_t player_id, const MoveRequest& move, MatchMove* applied) override;
     MatchError Resign(const std::string& match_id, std::int64_t player_id) override;
     std::optional<MatchInfo> GetMatch(const std::string& match_id) const override;
-    std::optional<MatchState> GetMatchState(const std::string& match_id,
-                                            std::int64_t viewer_id,
-                                            MatchError* error) const override;
+    std::optional<MatchState> GetMatchState(const std::string& match_id, std::int64_t viewer_id, MatchError* error) const override;
     std::optional<MatchResult> GetMatchResult(const std::string& match_id, MatchError* error) const override;
     std::optional<std::vector<MatchMove>> GetMatchHistory(const std::string& match_id, MatchError* error) const override;
     std::optional<std::string> GetReplayText(const std::string& match_id, MatchError* error) const override;

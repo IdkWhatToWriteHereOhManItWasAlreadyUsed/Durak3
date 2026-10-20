@@ -80,7 +80,6 @@ UTEST(GameSession, CanPushAttackerSkipsUnevenStack) {
     EXPECT_TRUE(session.CanPush(Card{3, 7}, 1));
 }
 
-
 UTEST(GameSession, DoMoveTransfersCardToStack) {
     GameSession session(1);
     session.player_cards[0] = {Card{0, 7}, Card{0, 8}};

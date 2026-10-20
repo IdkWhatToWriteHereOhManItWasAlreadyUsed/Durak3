@@ -49,6 +49,8 @@ userver_target_generate_openapi_handlers(
         SCHEMAS "${CMAKE_CURRENT_SOURCE_DIR}/openapi.yaml"
 )
 
+target_link_libraries(${PROJECT_NAME}_handlers userver::redis)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
         userver::core
         userver::redis
