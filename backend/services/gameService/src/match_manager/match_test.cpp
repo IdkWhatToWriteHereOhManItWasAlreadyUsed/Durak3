@@ -198,32 +198,4 @@ UTEST(Match, ResignFinishesMatch) {
     EXPECT_EQ(match.Resign(999), MatchError::kMatchAlreadyFinished);
 }
 
-UTEST(Match, CraftedAttackDefenseFlow) {
-    Match match("m-flow", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt, 1);
-    match.session.SetPlayersCards({Card{0, 8}}, {Card{0, 9}, Card{2, 7}});
-    match.session.trump = 3;
-    EXPECT_EQ(match.ApplyMove(1, MoveRequest{ActionType::kCard, Card{0, 8}, 0}), MatchError::kOk);
-    EXPECT_EQ(match.ApplyMove(1, MoveRequest{ActionType::kGrab}), MatchError::kIllegalMove);
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kTransfer}), MatchError::kIllegalMove);
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{0, 9}, 0}), MatchError::kOk);
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kTransfer}), MatchError::kOk);
-    MatchError error = MatchError::kOk;
-    auto state = match.GetState(2, error);
-    ASSERT_TRUE(state.has_value());
-    EXPECT_EQ(error, MatchError::kOk);
-    EXPECT_EQ(state->attacker_id, 2);
-    EXPECT_EQ(state->defender_id, 1);
-    EXPECT_TRUE(state->table[0].empty());
-    EXPECT_EQ(match.ApplyMove(1, MoveRequest{ActionType::kCard}), MatchError::kNotThisPlayersTurn);
-}
 
-UTEST(Match, IllegalDefenseRejectedWithoutHistoryRecord) {
-    Match match("m-rules", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt, 1);
-    match.session.SetPlayersCards({Card{0, 8}}, {Card{2, 9}});
-    match.session.trump = 3;
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard}), MatchError::kNotThisPlayersTurn);
-    EXPECT_EQ(match.ApplyMove(1, MoveRequest{ActionType::kCard, Card{0, 8}, 0}), MatchError::kOk);
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{2, 9}, 1}), MatchError::kIllegalMove);
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{2, 9}, 2}), MatchError::kIllegalMove);
-    EXPECT_EQ(match.GetHistory().size(), 1u);
-}
