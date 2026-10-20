@@ -17,7 +17,8 @@ find_package(
         core #
         chaotic
         chaotic-openapi
-    QUIET
+        redis
+    #QUIET
 )
 if(NOT userver_FOUND)
     # Tries TRY_DIR first, falls back to downloading userver from GitHub using CPM.
@@ -31,6 +32,8 @@ add_executable(${PROJECT_NAME}
         src/main.cpp
         src/components/match_manager_component.hpp
         src/components/match_manager_component.cpp
+        src/components/redis_client_component.cpp
+        src/components/redis_client_component.hpp
 )
 
 
@@ -48,6 +51,7 @@ userver_target_generate_openapi_handlers(
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
         userver::core
+        userver::redis
         match_manager
         ${PROJECT_NAME}_handlers
 )

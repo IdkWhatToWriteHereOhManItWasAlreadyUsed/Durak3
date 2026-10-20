@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     .Append<userver::congestion_control::Component>()
     .Append<userver::components::Container<Dependencies>>()
     .AppendComponentList(::handlers::gameService::ChaoticHandlersList())
-    .Append<gameService::MatchManagerComponent>()
+    .Append<MatchManagerComponent>()
     ;
 
     return userver::utils::DaemonMain(argc, argv, component_list);
