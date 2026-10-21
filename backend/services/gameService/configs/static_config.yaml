@@ -54,6 +54,11 @@ components_manager:
 
         match-manager-component:
 
+        default-secdist-provider:
+          config: "чего нибудь придумаю  "        # Values are supposed to be stored in this file ...
+          missing-ok: false                       # ... but if the file is missing it is still ok ...
+          environment-secrets-key: SECDIST_CONFIG # ... values will be loaded from this environment value
+
         testsuite-support:
             load-enabled: true
 
@@ -61,19 +66,15 @@ components_manager:
 
         redis-component-1:
             groups:
-
-            subscribe_groups:
                 - config_name: redis-client-1
                   db: redis-client-1
+
+            subscribe_groups:
 
             thread_pools:
               redis_thread_pool_size: 1
               sentinel_thread_pool_size: 1
 
-        default-secdist-provider:
-            config: secrets/secure_data.json        # Values are supposed to be stored in this file ...
-            missing-ok: true                        # ... but if the file is missing it is still ok ...
-            environment-secrets-key: SECDIST_CONFIG # ... values will be loaded from this environment value
 
 
 
