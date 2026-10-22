@@ -197,5 +197,3 @@ UTEST(Match, ResignFinishesMatch) {
     EXPECT_EQ(match.Resign(2), MatchError::kMatchAlreadyFinished);
     EXPECT_EQ(match.Resign(999), MatchError::kMatchAlreadyFinished);
 }
-
-

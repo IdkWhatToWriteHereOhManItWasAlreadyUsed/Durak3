@@ -17,7 +17,8 @@ find_package(
         core #
         chaotic
         chaotic-openapi
-    QUIET
+        redis
+    #QUIET
 )
 if(NOT userver_FOUND)
     # Tries TRY_DIR first, falls back to downloading userver from GitHub using CPM.
@@ -26,23 +27,18 @@ endif()
 
 userver_setup_environment()
 
-# Common sources
-include_directories(src)
+# The Service
+add_executable(${PROJECT_NAME}
+        src/main.cpp
+        src/components/match_manager_component.hpp
+        src/components/match_manager_component.cpp
+        src/components/redis_client_component.cpp
+        src/components/redis_client_component.hpp
+)
 
-# In-memory parties: Game with state on top of the engine + GameManager registry.
+
+
 add_subdirectory(src/match_manager)
-
-add_library(
-    ${PROJECT_NAME}_objs OBJECT
-    src/greeting.cpp #
-    src/hello.cpp #
-    src/hello_postgres.cpp
-)
-
-target_link_libraries(
-        ${PROJECT_NAME}_objs
-        PUBLIC userver::core #
-)
 
 userver_target_generate_openapi_handlers(
         ${PROJECT_NAME}_handlers
@@ -53,12 +49,12 @@ userver_target_generate_openapi_handlers(
         SCHEMAS "${CMAKE_CURRENT_SOURCE_DIR}/openapi.yaml"
 )
 
-
-# The Service
-add_executable(${PROJECT_NAME} src/main.cpp)
+target_link_libraries(${PROJECT_NAME}_handlers userver::redis)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-        ${PROJECT_NAME}_objs
+        userver::core
+        userver::redis
+        match_manager
         ${PROJECT_NAME}_handlers
 )
 
@@ -91,7 +87,7 @@ add_test(NAME ${PROJECT_NAME}_games_test COMMAND ${PROJECT_NAME}_games_test)
 #add_google_benchmark_tests(${PROJECT_NAME}_benchmark)
 
 # Functional testing
-#userver_testsuite_add_simple()
+userver_testsuite_add_simple()
 
 # Install
 include(GNUInstallDirs)

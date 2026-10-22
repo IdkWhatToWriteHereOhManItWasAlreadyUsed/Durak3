@@ -18,8 +18,7 @@ public:
 
     static Response Handle(Request&& request, Deps&& deps, RequestContext& context);
 
-    /* Uncomment, if you want to define a custom logging for request/response
-    body.
+    /* Uncomment, if you want to define a custom logging for request/response body.
      * E.g. you want to log several fields, but omit the others (secrets, etc.).
      *
 
