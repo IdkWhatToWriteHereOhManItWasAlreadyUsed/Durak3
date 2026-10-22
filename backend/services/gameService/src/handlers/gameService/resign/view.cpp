@@ -11,7 +11,6 @@ Response View::Handle(Request&& request, Deps&& deps, RequestContext& /*context*
     auto& match_manager_component = deps[kMatchManagerComponent];
     auto& match_manager = match_manager_component.GetManager();
 
-    // `id` — сдающийся игрок (гейтвей подставляет его из токена).
     const auto player_id = static_cast<std::int64_t>(request.body.id);
 
     const auto error = match_manager.Resign(request.gameId, player_id);
@@ -22,14 +21,12 @@ Response View::Handle(Request&& request, Deps&& deps, RequestContext& /*context*
         common::ThrowApiError<Response404>(common::kErrPlayerUnknown,
                                            "player " + std::to_string(player_id) + " is not a member of game " + request.gameId);
     }
-    // kMatchAlreadyFinished — идемпотентно возвращаем текущую партию.
 
     const auto info = match_manager.GetMatch(request.gameId);
     if (!info) {
         common::ThrowApiError<Response404>(common::kErrGameNotFound, "game " + request.gameId + " is not found");
     }
 
-    // Событие для realtime-gateway (опциональная часть схемы).
     if (error == durak::match::MatchError::kOk) {
         const auto game_id = common::ParseGameId(request.gameId);
         if (const auto redis_client = deps[kRedisClientComponent].GetRedisClient()) {

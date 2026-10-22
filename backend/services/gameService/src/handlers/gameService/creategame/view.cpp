@@ -46,7 +46,6 @@ Response View::Handle(Request&& request, Deps&& deps, RequestContext& /*context*
         first_attacker_id = static_cast<std::int64_t>(*body.firstAttackerId);
     }
 
-    // Движок перемешивает колоду, раздаёт карты, выбирает козырь.
     const auto game_id = match_manager.CreateMatch(std::move(players), first_attacker_id);
     if (!game_id) {
         common::ThrowApiError<Response400>(common::kErrBadRequest, "failed to create the game");

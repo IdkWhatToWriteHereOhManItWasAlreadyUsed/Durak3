@@ -10,7 +10,6 @@ Response View::Handle(Request&& request, Deps&& deps, RequestContext& /*context*
     auto& match_manager_component = deps[kMatchManagerComponent];
     auto& match_manager = match_manager_component.GetManager();
 
-    // `id` — запрашивающий игрок (гейтвей подставляет его из токена).
     durak::match::MatchError error = durak::match::MatchError::kOk;
     const auto state = match_manager.GetMatchState(request.gameId, request.id, &error);
     if (!state) {

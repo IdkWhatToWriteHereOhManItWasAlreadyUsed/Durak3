@@ -79,7 +79,6 @@ Response View::Handle(Request&& request, Deps&& deps, RequestContext& /*context*
         }
     }
 
-    // Новое состояние в терминах игрока, который сделал ход.
     auto state_error = durak::match::MatchError::kOk;
     const auto state = match_manager.GetMatchState(request.gameId, player_id, &state_error);
     if (!state) {
