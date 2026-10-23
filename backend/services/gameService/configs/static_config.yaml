@@ -76,15 +76,6 @@ components_manager:
         sentinel_thread_pool_size: 1
 
 
-    handler-create-game:
-    handler-get-game:
-    handler-get-game-result:
-    handler-get-game-state:
-    handler-get-move-history:
-    handler-make-move:
-    handler-resign:
-
-
 
 
 

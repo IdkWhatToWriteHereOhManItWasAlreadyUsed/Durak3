@@ -4,7 +4,6 @@ logger-level: info
 
 is-testing: false
 
-server-port: 8101
+server-port: 8080
 
-secdist-config#env:
-
+secdist-config#env: SECDIST_FILE
