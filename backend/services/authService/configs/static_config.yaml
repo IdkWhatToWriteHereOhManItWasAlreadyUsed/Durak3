@@ -35,7 +35,7 @@ components_manager:
                     statement_timeout_ms: 500
 
 
-        congestion-control:
+        #congestion-control:
 
         dns-client:
             fs-task-processor: fs-task-processor

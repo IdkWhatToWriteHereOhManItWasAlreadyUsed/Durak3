@@ -22,7 +22,7 @@
 int main(int argc, char* argv[]) {
     auto component_list = userver::components::MinimalServerComponentList()
                               .AppendComponentList(userver::clients::http::ComponentList())
-                              .Append<userver::congestion_control::Component>()
+                              //.Append<userver::congestion_control::Component>()
                               .Append<userver::clients::dns::Component>("dns-client")
                               .Append<userver::components::TestsuiteSupport>()
                               .Append<userver::components::Postgres>("postgres-db-1")

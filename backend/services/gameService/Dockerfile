@@ -1,7 +1,7 @@
 # ============================================
 # STAGE 1: Builder
 # ============================================
-ARG BUILD_TYPE=Release
+ARG BUILD_TYPE=Debug
 
 FROM ghcr.io/userver-framework/ubuntu-22.04-userver:latest AS builder
 ARG BUILD_TYPE
@@ -37,7 +37,7 @@ RUN ldd /install/bin/gameService \
 # ============================================
 FROM ubuntu:22.04
 
-ARG BUILD_TYPE=Release
+ARG BUILD_TYPE=Debug
 ENV BUILD_TYPE=${BUILD_TYPE}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
