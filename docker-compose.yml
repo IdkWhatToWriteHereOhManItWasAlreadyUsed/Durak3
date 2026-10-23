@@ -1,0 +1,202 @@
+services:
+
+  ######################################################
+
+  postgres:
+    image: postgres:15
+    container_name: durak-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${AUTH_DB_NAME:-auth}
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/services/authService/postgresql/00-create-databases.sql:/docker-entrypoint-initdb.d/00-create-databases.sql:ro
+      - ./backend/services/authService/postgresql/schemas/db_1.sql:/docker-entrypoint-initdb.d/01-auth-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${AUTH_DB_NAME:-auth}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - durak-network
+    restart: unless-stopped
+
+  ######################################################
+
+  redis:
+    image: redis:7
+    container_name: durak-redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-ashasnalodochkevotsudavotbambambamcincanchantan}
+    expose:
+      - "6379"
+      - "26379"
+    command: >
+      sh -c 'redis-server --requirepass "$${REDIS_PASSWORD}" &
+             printf "port 26379\nsentinel resolve-hostnames yes\nsentinel announce-hostnames yes\nsentinel monitor mymaster redis 6379 2\nsentinel auth-pass mymaster $${REDIS_PASSWORD}\nsentinel down-after-milliseconds mymaster 3000\nsentinel failover-timeout mymaster 10000\nsentinel parallel-syncs mymaster 1\nsentinel announce-ip redis\nsentinel announce-port 26379\n" > /tmp/sentinel.conf &&
+             exec redis-sentinel /tmp/sentinel.conf'
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - durak-network
+    restart: unless-stopped
+
+  ######################################################
+
+  auth-service:
+    build:
+      context: ./backend/services/authService
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    environment:
+      - DB_CONNECTION=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${AUTH_DB_NAME:-auth}
+      - SERVER_PORT=8080
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - ENVIRONMENT=${ENVIRONMENT:-prod}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - durak-network
+    restart: unless-stopped
+
+  ######################################################
+
+  game-service:
+    build:
+      context: ./backend/services/gameService
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    environment:
+      - SERVER_PORT=8080
+      - SECDIST_CONFIG={"redis_settings":{"redis-client-1":{"password":"${REDIS_PASSWORD:-ashasnalodochkevotsudavotbambambamcincanchantan}","database_index":0,"sentinels":[{"host":"redis","port":26379}],"shards":[{"name":"mymaster"}]}}}
+    volumes:
+      - ./backend/services/gameService/configs/config_vars.docker.yaml:/etc/gameService/config_vars.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - durak-network
+    restart: unless-stopped
+
+  ######################################################
+
+  matchmaking-service:
+    build:
+      context: ./backend/services/matchmakingService
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    environment:
+      - MATCHMAKING_SERVICE_PORT=8080
+      - AUTH_URL=http://auth-service:8080
+      - GAME_URL=http://game-service:8080
+      - POSTGRES_DSN=host=postgres port=5432 dbname=matchmaking user=${POSTGRES_USER:-postgres} password=${POSTGRES_PASSWORD:-postgres}
+      - REDIS_SENTINEL_HOST=redis
+      - REDIS_SENTINEL_PORT=26379
+      - REDIS_MASTER_NAME=mymaster
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-ashasnalodochkevotsudavotbambambamcincanchantan}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - durak-network
+    restart: unless-stopped
+
+  ######################################################
+
+  lobby-service:
+    build:
+      context: ./backend/services/lobbyService
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    environment:
+      - LOBBY_SERVICE_PORT=8080
+      - AUTH_URL=http://auth-service:8080
+      - LOBBY_DB_PATH=/app/data/lobby.db
+      - REDIS_SENTINEL_HOST=redis
+      - REDIS_SENTINEL_PORT=26379
+      - REDIS_MASTER_NAME=mymaster
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-ashasnalodochkevotsudavotbambambamcincanchantan}
+    volumes:
+      - ./backend/services/lobbyService/data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - durak-network
+    restart: unless-stopped
+
+  ######################################################
+
+  api-gateway:
+    build:
+      context: ./backend/gateways/apiGateway
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    environment:
+      - OAUTH_TOKEN_CHECK_ENABLED=true
+    depends_on:
+      - auth-service
+      - lobby-service
+      - matchmaking-service
+      - game-service
+    networks:
+      - durak-network
+    restart: unless-stopped
+
+  ######################################################
+
+  realtime-gateway:
+    build:
+      context: ./backend/gateways/realtimeGateway
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    depends_on:
+      - auth-service
+      - lobby-service
+      - matchmaking-service
+      - game-service
+      - redis
+    networks:
+      - durak-network
+    restart: unless-stopped
+
+  ######################################################
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "${NGINX_PORT:-8080}:8080"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-gateway
+      - realtime-gateway
+    networks:
+      - durak-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  durak-network:
+    driver: bridge

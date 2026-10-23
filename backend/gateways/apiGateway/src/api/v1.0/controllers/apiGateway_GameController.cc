@@ -74,6 +74,9 @@ void GameController::Forward(const HttpRequestPtr& downstream, const std::functi
         downstream,
         [callback](ReqResult result, const HttpResponsePtr& response) {
             if (result == ReqResult::Ok && response) {
+                // Drogon сам добавит Content-Length при отправке тела;
+                // входящий от downstream-сервиса удаляем, иначе дубль.
+                response->removeHeader("Content-Length");
                 callback(response);
                 return;
             }

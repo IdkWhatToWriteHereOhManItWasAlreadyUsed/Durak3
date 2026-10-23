@@ -8,5 +8,15 @@
     ],
     "app": {
         "threads_num": 4
+    },
+    "custom_config" : {
+        "auth":        "http://auth-service:8080",
+        "lobby":       "http://lobby-service:8080",
+        "matchmaking": "http://matchmaking-service:8080",
+        "game":        "http://game-service:8080",
+        "redis_host":  "redis",
+        "redis_port":  6379,
+        "redis_db":    0,
+        "redis_password": "ashasnalodochkevotsudavotbambambamcincanchantan"
     }
 }

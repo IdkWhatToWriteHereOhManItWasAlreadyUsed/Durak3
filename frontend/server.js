@@ -9,10 +9,11 @@ const path = require('path');
 const ROOT = __dirname;
 const DEFAULT_PORT = 5500;
 
-// api-gateway и realtime-gateway по умолчанию слушают 8080/8081
-// (см. backend/gateways/*/config/app/config.json и nginx/nginx.conf).
-const API_TARGET = new URL(process.env.API_TARGET || 'http://localhost:8080');
-const WS_TARGET = new URL(process.env.WS_TARGET || 'http://localhost:8081');
+// api-gateway и realtime-gateway (stub-python) слушают 8222 и 8090
+// (см. backend/gateways/apiGateway/config/app/config.json и
+//  backend/gateways/realtimeGateway/stub-python/app/config.py).
+const API_TARGET = new URL(process.env.API_TARGET || 'http://localhost:8222');
+const WS_TARGET = new URL(process.env.WS_TARGET || 'http://localhost:8090');
 const WS_PATH = process.env.WS_PATH || '/ws';
 
 const MIME = {
