@@ -1,88 +1,75 @@
 components_manager:
-  task_processors:  # Task processor is an executor for coroutine tasks
-
-    main-task-processor:  # Make a task processor for CPU-bound coroutine tasks.
-      worker_threads: $worker-threads  # Process tasks in 4 threads.
-
-    fs-task-processor:  # Make a separate task processor for filesystem bound tasks.
-      worker_threads: $worker-fs-threads
-
-  default_task_processor: main-task-processor
-
-  components:  # Configuring components that were registered via component_list
+  components:
+    handler-create-game:
+      path: /games
+      method: POST
+    handler-get-game:
+      path: /games/{gameId}
+      method: GET
+    handler-get-game-state:
+      path: /games/{gameId}/state
+      method: GET
+    handler-make-move:
+      path: /games/{gameId}/moves
+      method: POST
+    handler-get-move-history:
+      path: /games/{gameId}/moves/history
+      method: GET
+    handler-resign:
+      path: /games/{gameId}/resign
+      method: POST
+    handler-get-game-result:
+      path: /games/{gameId}/result
+      method: GET
     server:
-      listener:  # configuring the main listening socket...
-        port: $server-port  # ...to listen on this port and...
-        task_processor: main-task-processor  # ...process incoming requests on this task processor.
-
+      listener:
+        port: $server-port
+        task_processor: main-task-processor
     logging:
       fs-task-processor: fs-task-processor
       loggers:
         default:
           file_path: '@stderr'
           level: $logger-level
-          overflow_behavior: discard  # Drop logs if the system is too busy to write them down.
-
-    # Dynamic config options. Cache is disabled, updates are disabled.
+          overflow_behavior: discard
     dynamic-config:
-      # For most of userver dynamic configs, defaults are used, some are overridden here.
-      # See userver "dynamic config" docs for what configs exist.
       defaults:
         HTTP_CLIENT_CONNECTION_POOL_SIZE: 1000
         POSTGRES_DEFAULT_COMMAND_CONTROL:
           network_timeout_ms: 750
           statement_timeout_ms: 500
-
-    #testsuite-support: {}
-
-    congestion-control:
-
-    http-client:
+    congestion-control: null
+    http-client: null
     http-client-core:
       load-enabled: true
       fs-task-processor: fs-task-processor
-
     dns-client:
       fs-task-processor: fs-task-processor
-
     handler-ping:
       path: /ping
       method: GET
       task_processor: main-task-processor
       throttling_enabled: false
       url_trailing_slash: strict-match
-
-    match-manager-component:
-
+    match-manager-component: null
     default-secdist-provider:
-      config: $secdist-config       # Values are supposed to be stored in this file ...
-      missing-ok: false                       # ... but if the file is missing it is still ok ...
-      environment-secrets-key: SECDIST_CONFIG # ... values will be loaded from this environment value
-
+      config: $secdist-config
+      missing-ok: false
+      environment-secrets-key: SECDIST_CONFIG
     testsuite-support:
       load-enabled: true
-
-    redis-client-component:
-
+    redis-client-component: null
     redis-component-1:
       groups:
-        - config_name: redis-client-1
-          db: redis-client-1
-
-      subscribe_groups:
-
+      - config_name: redis-client-1
+        db: redis-client-1
+      subscribe_groups: null
       thread_pools:
         redis_thread_pool_size: 1
         sentinel_thread_pool_size: 1
-
-
-
-
-
-
-
-
-
-
-
-
+  task_processors:
+    main-task-processor:
+      worker_threads: $worker-threads
+    fs-task-processor:
+      worker_threads: $worker-fs-threads
+  default_task_processor: main-task-processor

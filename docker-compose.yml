@@ -80,7 +80,7 @@ services:
       - "8080"
     environment:
       # абсолютный путь внутри контейнера (env читается config_vars.docker.yaml)
-      - SECDIST_FILE=/etc/gameService/secure_data.json
+      - SECDIST_PATH=/etc/gameService/secure_data.json
     volumes:
       - ./backend/services/gameService/configs/config_vars.docker.yaml:/etc/gameService/config_vars.yaml:ro
       - ${SECDIST_FILE}:/etc/gameService/secure_data.json:ro

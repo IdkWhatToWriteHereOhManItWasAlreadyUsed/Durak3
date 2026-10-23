@@ -6,4 +6,4 @@ is-testing: false
 
 server-port: 8080
 
-secdist-config#env: SECDIST_FILE
+secdist-config#env: SECDIST_PATH

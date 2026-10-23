@@ -5,7 +5,7 @@ ARG BUILD_TYPE=Debug
 
 FROM ghcr.io/userver-framework/ubuntu-22.04-userver:latest AS builder
 ARG BUILD_TYPE
-ENV BUILD_TYPE=${BUILD_TYPE}
+ENV BUILD_TYPE=Debug
 
 WORKDIR /app
 
@@ -39,6 +39,7 @@ FROM ubuntu:22.04
 
 ARG BUILD_TYPE=Debug
 ENV BUILD_TYPE=${BUILD_TYPE}
+ENV USERVER_ENABLE_STACK_USAGE_MONITOR=0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl \
