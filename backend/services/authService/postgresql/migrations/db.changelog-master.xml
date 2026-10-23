@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <include file="V1__init_schema.sql" relativeToChangelogFile="true"/>
+    <include file="V2__add_is_admin.sql" relativeToChangelogFile="true"/>
+    <include file="V4__add_indexes.sql" relativeToChangelogFile="true"/>
+    <include file="V5__add_oauth_db.sql" relativeToChangelogFile="true"/>
+    <include file="V6__delete_col_google_id.sql" relativeToChangelogFile="true"/>
+    <include file="V7__add_purchase_methods.sql" relativeToChangelogFile="true"/>
+</databaseChangeLog>

@@ -21,7 +21,8 @@ const CONFIG = Object.assign({
     wsUrl: '',
     // OAuth2 client id из Google Cloud Console.
     googleClientId: '',
-    // URI, зарегистрированный в Google. По умолчанию — текущая страница.
+    // URI, зарегистрированный в Google. Пусто = вычисляется из текущего
+    // адреса страницы (normalizeConfig ниже), т.е. origin + pathname.
     oauthRedirectUri: '',
     clientVersion: '2.0.0',
 

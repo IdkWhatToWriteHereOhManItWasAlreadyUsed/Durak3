@@ -64,9 +64,30 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate-auth:
+        condition: service_completed_successfully
     networks:
       - durak-network
     restart: unless-stopped
+
+  ######################################################
+
+  migrate-auth:
+    image: liquibase/liquibase:4.27
+    command: >
+      --url=jdbc:postgresql://postgres:5432/${AUTH_DB_NAME}
+      --username=${POSTGRES_USER}
+      --password=${POSTGRES_PASSWORD}
+      --changelog-file=db.changelog-master.xml
+      --search-path=/liquibase/changelog
+      update
+    volumes:
+      - ./backend/services/authService/postgresql/migrations:/liquibase/changelog:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - durak-network
 
   ######################################################
 
