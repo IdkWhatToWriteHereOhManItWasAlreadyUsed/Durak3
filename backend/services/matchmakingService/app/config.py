@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 
@@ -20,18 +19,7 @@ REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 REDIS_SOCKET_TIMEOUT = int(os.getenv("REDIS_SOCKET_TIMEOUT", "3"))
 
 
-def _redis_password() -> str:
-    env = os.getenv("REDIS_PASSWORD")
-    if env:
-        return env
-    secure = SERVICES_ROOT / "gameService" / "secrets" / "secure_data.json"
-    if secure.exists():
-        cfg = json.loads(secure.read_text())["redis_settings"]["redis-client-1"]
-        return cfg["password"]
-    return ""
-
-
-REDIS_PASSWORD = _redis_password()
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 
 NAME_CACHE_KEY = "names:{}"
 NAME_CACHE_TTL = 300

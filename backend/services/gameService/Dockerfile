@@ -19,12 +19,13 @@ RUN cmake -B build \
     -DUSERVER_FEATURE_GRPC=OFF \
     -DUSERVER_FEATURE_REDIS=ON \
     -DUSERVER_FEATURE_UTEST=ON \
-    -G Ninja \
-    && cmake --build build --parallel $(nproc) \
-    || true
+    -G Ninja
 
 COPY src ./src
 COPY configs ./configs
+
+RUN cmake --build build --parallel $(nproc) && \
+    cmake --install build --prefix /install
 
 RUN ldd /install/bin/gameService \
     | grep -oP '(?<=> )/[^ ]+' \

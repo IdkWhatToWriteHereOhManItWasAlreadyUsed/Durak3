@@ -1,5 +1,7 @@
 #include "realtimeGateway_RealtimeController.h"
 
+#include <cstdlib>
+
 #include <drogon/HttpAppFramework.h>
 #include <trantor/net/InetAddress.h>
 
@@ -17,6 +19,15 @@ SessionManager& Sessions() {
 }
 
 static Json::FastWriter kFastWriter;
+
+// Пароль Redis берём из окружения (прокидывается docker-compose).
+// Fallback — значение из config.json (там пустая строка по умолчанию).
+static std::string GetRedisPassword() {
+    if (const char* env = std::getenv("REDIS_PASSWORD")) {
+        return env;
+    }
+    return app().getCustomConfig()["redis_password"].asString();
+}
 
 static std::string str(const Json::Value& value, const char* fallback = "") {
     return value.isString() ? value.asString()
@@ -41,11 +52,10 @@ RealtimeController::RealtimeController() {
         trantor::InetAddress(custom["redis_host"].asString(),
                              static_cast<uint16_t>(custom["redis_port"].asUInt())),
         1,
-        custom["redis_password"].asString(),
+        GetRedisPassword(),
         custom["redis_db"].asUInt());
 
-    m_subscriber = m_redisClient->newSubscriber();
-    for (const std::string channel :
+    m_subscriber = m_redisClient->newSubscriber();    for (const std::string channel :
          {"invite.created", "invite.accepted", "invite.declined",
           "game.started", "game.move", "game.finished",
           "presence.online", "presence.offline", "auth.logged_out"}) {
