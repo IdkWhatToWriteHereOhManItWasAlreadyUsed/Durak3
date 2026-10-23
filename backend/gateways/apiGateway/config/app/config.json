@@ -7,7 +7,7 @@
         }
     ],
     "app": {
-        "threads_num": 4
+        "threads_num": 3
     },
     "custom_config" : {
         "auth":        "http://auth-service:8080",
@@ -15,6 +15,6 @@
         "matchmaking": "http://matchmaking-service:8080",
         "game":        "http://game-service:8080",
         "replay":      "http://replay-service:8080",
-        "redis":       "redis://redis-cache:6379"
+        "redis":       "redis://redis:6379"
     }
 }

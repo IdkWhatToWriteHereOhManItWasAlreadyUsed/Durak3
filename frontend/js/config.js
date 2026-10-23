@@ -5,8 +5,8 @@
  *
  *   <script>
  *       window.DURAK_CONFIG = {
- *           apiBase: 'http://localhost:8080',
- *           wsUrl: 'ws://localhost:8081/ws',
+ *           apiBase: 'http://localhost:8222',
+ *           wsUrl: 'ws://localhost:8090/ws',
  *           googleClientId: '....apps.googleusercontent.com',
  *       };
  *   </script>
@@ -39,14 +39,14 @@ const CONFIG = Object.assign({
     const served = location.protocol === 'http:' || location.protocol === 'https:';
 
     if (!CONFIG.apiBase) {
-        CONFIG.apiBase = served ? location.origin : 'http://localhost:8080';
+        CONFIG.apiBase = served ? location.origin : 'http://localhost:8222';
     }
     CONFIG.apiBase = CONFIG.apiBase.replace(/\/+$/, '');
 
     if (!CONFIG.wsUrl) {
         CONFIG.wsUrl = served
             ? (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'
-            : 'ws://localhost:8081/ws';
+            : 'ws://localhost:8090/ws';
     }
 
     if (!CONFIG.oauthRedirectUri) {

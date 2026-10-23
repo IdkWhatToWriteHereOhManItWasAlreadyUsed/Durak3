@@ -15,7 +15,7 @@ Makefile.local
 .venv/
 .venv1/
 
-configs/config_vars.yaml
+#configs/config_vars.yaml
 
 # Binaries
 db_test

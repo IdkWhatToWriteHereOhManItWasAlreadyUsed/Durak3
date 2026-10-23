@@ -11,3 +11,4 @@
 secrets/
 *.env
 secure_data.json
+uploads
