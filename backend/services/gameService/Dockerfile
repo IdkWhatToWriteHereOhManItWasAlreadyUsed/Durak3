@@ -9,22 +9,23 @@ ENV BUILD_TYPE=${BUILD_TYPE}
 
 WORKDIR /app
 
+# Копируем всё, что нужно CMake на этапе конфигурации
 COPY CMakeLists.txt .
 COPY cmake ./cmake
+COPY openapi.yaml ./openapi.yaml
+COPY configs ./configs
+COPY src ./src
 
+# Теперь конфигурируем
 RUN cmake -B build \
     -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
     -DUSERVER_FEATURE_MONGODB=OFF \
     -DUSERVER_FEATURE_POSTGRESQL=OFF \
     -DUSERVER_FEATURE_GRPC=OFF \
     -DUSERVER_FEATURE_REDIS=ON \
-    -DUSERVER_FEATURE_UTEST=ON \
-    -G Ninja
+    -DUSERVER_FEATURE_UTEST=ON
 
-COPY src ./src
-COPY configs ./configs
-
-RUN cmake --build build --parallel $(nproc) && \
+RUN cmake --build build --parallel 4 && \
     cmake --install build --prefix /install
 
 RUN ldd /install/bin/gameService \
@@ -48,12 +49,9 @@ COPY --from=builder /install/etc/gameService /etc/gameService
 COPY --from=builder /install/lib/* /usr/local/lib/
 RUN ldconfig
 
-COPY --from=builder /app/src /app/src
-
 EXPOSE 8080
-
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8080/ping || exit 1
 
-CMD /usr/local/bin/gameService -c /etc/gameService/static_config.yaml --config_vars /etc/gameService/config_vars.yaml; 
+CMD /usr/local/bin/gameService -c /etc/gameService/static_config.yaml --config_vars /etc/gameService/config_vars.yaml

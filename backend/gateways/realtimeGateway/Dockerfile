@@ -33,8 +33,10 @@ RUN git clone https://github.com/drogonframework/drogon.git && \
              -DBUILD_SQLITE3=OFF \
              -DUSE_ORM=OFF \
              -DBUILD_REDIS=ON \
-             -DUSE_BROTLI=OFF \
-             && make -j$(nproc) && make install && ldconfig
+             -DUSE_BROTLI=OFF && \
+             make -j2 && \
+                 make install && \
+                 ldconfig
 
 COPY CMakeLists.txt /build/
 COPY src /build/src
@@ -43,12 +45,12 @@ COPY config /build/config
 WORKDIR /build
 RUN mkdir -p /build/build && cd /build/build && \
     if [ "${BUILD_TYPE}" = "Debug" ]; then \
-        cmake .. -DCMAKE_BUILD_TYPE=Debug -G Ninja \
+        cmake .. -DCMAKE_BUILD_TYPE=Debug \
                  -DCMAKE_CXX_FLAGS="-g -O0 -fdebug-prefix-map=/build=/app"; \
     else \
-        cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja; \
+        cmake .. -DCMAKE_BUILD_TYPE=Release; \
     fi && \
-    make -j$(nproc)
+    make -j2
 
 # ============================================
 # STAGE 2: Runtime

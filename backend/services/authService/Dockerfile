@@ -19,21 +19,21 @@ COPY configs ./configs
 RUN cmake -B build \
     -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
     -DUSERVER_FEATURE_POSTGRESQL=ON \
-    -G Ninja || true
+    || true
 
 RUN if [ "${BUILD_TYPE}" = "Debug" ]; then \
         cmake -B build \
             -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
             -DUSERVER_FEATURE_POSTGRESQL=ON \
             -DCMAKE_CXX_FLAGS="-g -O0 -fdebug-prefix-map=/app=/app" \
-            -G Ninja; \
+            ; \
     else \
         cmake -B build \
             -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
             -DUSERVER_FEATURE_POSTGRESQL=ON \
-            -G Ninja; \
+            ; \
     fi && \
-    cmake --build build --parallel $(nproc) && \
+    cmake --build build --parallel 4 && \
     cmake --install build --prefix /install
 
 RUN ldd /install/bin/db_test \
