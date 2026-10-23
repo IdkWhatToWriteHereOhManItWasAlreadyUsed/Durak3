@@ -59,16 +59,29 @@ API_TARGET=http://localhost:8080 WS_TARGET=http://localhost:8081 node server.js
 
 ### Вход через Google
 
-1. Создайте OAuth 2.0 Client ID (Web application) в Google Cloud Console.
-2. Добавьте `http://localhost:5500/` в **Authorized redirect URIs**.
-3. Пропишите `googleClientId` в `js/config.js` (или `window.DURAK_CONFIG`).
-4. Нажмите «Войти через Google» — клиент отправит authorization code на
-   `POST /api/auth/google` и сохранит выданный opaque `accessToken`.
+Вход в игру — только через Google. Client id не прописывается в коде руками,
+а приходит из окружения:
 
-Пока `googleClientId` не задан, доступен ручной вход: вставьте `accessToken`,
-полученный от auth-service (`POST /auth/google`), в поле на экране входа.
-Токен хранится в `localStorage` и передаётся как
-`Authorization: Bearer <accessToken>`.
+* `node server.js` читает переменную окружения `GOOGLE_CLIENT_ID` и отдаёт её
+  фронтенду как `js/oauth.js` (значение, как и весь `.env`, задаётся в корне);
+* в docker-compose компонент `nginx` генерирует `js/oauth.js` при старте
+  контейнера из шаблона `js/oauth.js.template` (envsubst).
+
+Осталось один раз настроить Google:
+
+1. Создайте OAuth 2.0 Client ID (Web application) в Google Cloud Console.
+2. Добавьте туда адреса фронтенда в **Authorized redirect URIs**:
+   `http://localhost:5500/` (node server.js) и `http://localhost:8080/` (nginx).
+3. Пропишите client id в `.env` рядом с docker-compose (`GOOGLE_CLIENT_ID=...`,
+   см. `.env.example`).
+4. Кнопка «Войти через Google» станет активной — клиент отправит authorization
+   code на `POST /api/auth/google` и сохранит выданный opaque `accessToken`.
+
+Token хранится в `localStorage` и передаётся как
+`Authorization: Bearer <accessToken>` (WebSocket — как `?token=...`).
+
+Пока `GOOGLE_CLIENT_ID` не задан, кнопка остаётся заблокированной, а на экране
+входа выводится подсказка.
 
 ## Что реализовано
 
@@ -120,9 +133,10 @@ frontend/
 ├── server.js           статика + прокси /api и /ws
 ├── css/style.css       оформление
 ├── js/config.js        адреса API/WS и параметры OAuth
+├── js/oauth.js         googleClientId из окружения (генерируется, см. шаблон)
 ├── js/api.js           HTTP-клиент api-gateway, ApiError, токен
 ├── js/realtime.js      WebSocket-клиент realtime-gateway
-├── js/auth.js          Google OAuth / accessToken / выход
+├── js/auth.js          Google OAuth / выход
 ├── js/lobby.js         присутствие, игроки, приглашения, матчи, повторы
 ├── js/game.js          игровой экран и серверные ходы
 ├── js/replay.js        просмотр кадров повтора

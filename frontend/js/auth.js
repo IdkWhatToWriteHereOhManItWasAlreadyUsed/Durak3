@@ -1,10 +1,13 @@
 /**
  * Аутентификация через auth-service / api-gateway.
  *
- * Единственный документированный способ входа — Google OAuth2:
+ * Единственный способ входа — Google OAuth2:
  *   POST /api/auth/google { code, redirect_uri } -> { id, email, username, accessToken }
  * Полученный accessToken — opaque UUID (НЕ JWT), хранится в localStorage
  * и отправляется как `Authorization: Bearer <token>`.
+ *
+ * googleClientId берётся из переменной окружения GOOGLE_CLIENT_ID
+ * (см. js/oauth.js) либо из window.DURAK_CONFIG / js/config.js.
  */
 const Auth = (() => {
     const USER_KEY = 'durak.user';
@@ -17,27 +20,17 @@ const Auth = (() => {
     function init() {
         el.note = document.getElementById('loginNote');
         el.google = document.getElementById('btnGoogleLogin');
-        el.tokenForm = document.getElementById('tokenLoginForm');
-        el.tokenInput = document.getElementById('tokenInput');
-        el.devPanel = document.getElementById('devLogin');
         el.userName = document.getElementById('userName');
         el.userId = document.getElementById('userId');
         el.logout = document.getElementById('btnLogout');
         el.conn = document.getElementById('connStatus');
 
         if (el.google) el.google.addEventListener('click', loginWithGoogle);
-        if (el.tokenForm) {
-            el.tokenForm.addEventListener('submit', event => {
-                event.preventDefault();
-                loginWithToken();
-            });
-        }
         if (el.logout) el.logout.addEventListener('click', logout);
 
-        if (el.devPanel) el.devPanel.classList.toggle('hidden', !!CONFIG.googleClientId);
-        if (!CONFIG.googleClientId && el.google) {
+        if (el.google && !CONFIG.googleClientId) {
             el.google.disabled = true;
-            el.google.title = 'Укажите googleClientId в js/config.js';
+            note('Google-вход выключен: не задан GOOGLE_CLIENT_ID (см. .env.example).');
         }
 
         Api.onUnauthorized(handleExpired);
@@ -98,7 +91,7 @@ const Auth = (() => {
 
     function loginWithGoogle() {
         if (!CONFIG.googleClientId) {
-            note('Не задан googleClientId. Пропишите его в js/config.js.');
+            note('Google-вход выключен: не задан GOOGLE_CLIENT_ID (см. .env.example).');
             return;
         }
         if (!CONFIG.oauthRedirectUri) {
@@ -118,31 +111,6 @@ const Auth = (() => {
         url.searchParams.set('state', state);
         url.searchParams.set('prompt', 'select_account');
         location.href = url.toString();
-    }
-
-    async function loginWithToken() {
-        const token = (el.tokenInput && el.tokenInput.value || '').trim();
-        if (!token) {
-            note('Вставьте accessToken, полученный от auth-service.');
-            return;
-        }
-
-        App.showLoading('Проверка токена…');
-        Api.setToken(token);
-        try {
-            const me = await Api.auth.me();
-            user = { ...me };
-            saveUser();
-            el.tokenInput.value = '';
-            note('');
-            onAuthenticated(true);
-        } catch (e) {
-            Api.setToken('');
-            clearUser();
-            note(e.status === 401 ? 'Токен недействителен или истёк.' : (e.message || 'Сервер недоступен'));
-        } finally {
-            App.hideLoading();
-        }
     }
 
     function applySession(response) {
