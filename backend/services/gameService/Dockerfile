@@ -54,4 +54,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8080/ping || exit 1
 
-CMD /usr/local/bin/gameService -c /etc/gameService/static_config.yaml --config_vars /etc/gameService/config_vars.yaml
+CMD /usr/local/bin/gameService -c /etc/gameService/static_config.yaml --config_vars /etc/gameService/config_vars.docker.yaml

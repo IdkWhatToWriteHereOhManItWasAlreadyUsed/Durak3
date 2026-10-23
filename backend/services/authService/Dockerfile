@@ -66,6 +66,7 @@ RUN chmod +x /app/authService
 EXPOSE 8080
 
 ENV DB_CONNECTION=""
+ENV CPU_LIMIT=1
 
 CMD if [ "$BUILD_TYPE" = "Debug" ]; then \
         echo "Starting gdbserver on port 12345" && \
