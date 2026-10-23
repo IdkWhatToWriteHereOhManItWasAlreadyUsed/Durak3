@@ -1,6 +1,11 @@
 #include "match/match.hpp"
 
 #include <userver/utest/utest.hpp>
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
 #include <utility>
 
 #include "match/state/game_session.hpp"
@@ -24,7 +29,8 @@ Player MakePlayer(std::int64_t id, std::string name) {
 
 UTEST(MatchManager, CreateReturnsIdAndInfo) {
     MatchManager manager(42);
-    const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
+    const auto match_id = manager.CreateMatch(
+        {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt);
     ASSERT_TRUE(match_id.has_value());
     EXPECT_EQ(manager.GetMatchCount(), 1u);
     const auto info = manager.GetMatch(*match_id);
@@ -39,9 +45,10 @@ UTEST(MatchManager, CreateReturnsIdAndInfo) {
 
 UTEST(MatchManager, CreateWithExplicitFirstAttacker) {
     MatchManager manager(42);
-    const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, 2);
+    const auto match_id = manager.CreateMatch(
+        {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, 2);
     ASSERT_TRUE(match_id.has_value());
-    auto state = manager.GetMatchState(*match_id, 1);
+    auto state = manager.GetMatchState(*match_id, 1, nullptr);
     ASSERT_TRUE(state.has_value());
     EXPECT_EQ(state->current_player_id, 2);
     EXPECT_EQ(state->attacker_id, 2);
@@ -50,16 +57,22 @@ UTEST(MatchManager, CreateWithExplicitFirstAttacker) {
 
 UTEST(MatchManager, CreateRejectsBadPlayers) {
     MatchManager manager(42);
-    EXPECT_FALSE(manager.CreateMatch({MakePlayer(1, "solo")}).has_value());
-    EXPECT_FALSE(manager.CreateMatch({MakePlayer(1, "a"), MakePlayer(2, "b"), MakePlayer(3, "c")}).has_value());
-    EXPECT_FALSE(manager.CreateMatch({MakePlayer(1, "a"), MakePlayer(1, "dup")}).has_value());
+    EXPECT_FALSE(manager.CreateMatch({MakePlayer(1, "solo")}, std::nullopt).has_value());
+    EXPECT_FALSE(manager.CreateMatch(
+                             {MakePlayer(1, "a"), MakePlayer(2, "b"), MakePlayer(3, "c")},
+                             std::nullopt)
+                     .has_value());
+    EXPECT_FALSE(manager.CreateMatch(
+                             {MakePlayer(1, "a"), MakePlayer(1, "dup")}, std::nullopt)
+                     .has_value());
     EXPECT_EQ(manager.GetMatchCount(), 0u);
 }
 
 UTEST(MatchManager, UnknownMatch) {
     MatchManager manager(42);
     EXPECT_FALSE(manager.GetMatch("no-such-match").has_value());
-    EXPECT_EQ(manager.ApplyMove("no-such-match", 1, MoveRequest{}), MatchError::kMatchNotFound);
+    EXPECT_EQ(manager.ApplyMove("no-such-match", 1, MoveRequest{}, nullptr),
+              MatchError::kMatchNotFound);
     MatchError error = MatchError::kOk;
     EXPECT_FALSE(manager.GetMatchHistory("no-such-match", &error).has_value());
     EXPECT_EQ(error, MatchError::kMatchNotFound);
@@ -70,9 +83,10 @@ UTEST(MatchManager, UnknownMatch) {
 
 UTEST(MatchManager, GetMatchStateViewersPerspective) {
     MatchManager manager(42);
-    const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
+    const auto match_id = manager.CreateMatch(
+        {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt);
     ASSERT_TRUE(match_id.has_value());
-    auto state = manager.GetMatchState(*match_id, 1);
+    auto state = manager.GetMatchState(*match_id, 1, nullptr);
     ASSERT_TRUE(state.has_value());
     EXPECT_EQ(state->deck_size, 24);
     EXPECT_EQ(state->your_hand.size(), 6u);
@@ -80,7 +94,7 @@ UTEST(MatchManager, GetMatchStateViewersPerspective) {
     EXPECT_EQ(state->current_player_id, 1);
     EXPECT_TRUE(state->table[0].empty());
     EXPECT_EQ(state->match_id, *match_id);
-    auto opponent_state = manager.GetMatchState(*match_id, 2);
+    auto opponent_state = manager.GetMatchState(*match_id, 2, nullptr);
     ASSERT_TRUE(opponent_state.has_value());
     EXPECT_EQ(opponent_state->your_hand.size(), 6u);
     MatchError error = MatchError::kOk;
@@ -90,30 +104,41 @@ UTEST(MatchManager, GetMatchStateViewersPerspective) {
 
 UTEST(MatchManager, MoveTurnOrderEnforced) {
     MatchManager manager(42);
-    const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
+    const auto match_id = manager.CreateMatch(
+        {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt);
     ASSERT_TRUE(match_id.has_value());
-    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{}), MatchError::kNotThisPlayersTurn);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 999, MoveRequest{}), MatchError::kUnknownPlayer);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{}, nullptr),
+              MatchError::kNotThisPlayersTurn);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 999, MoveRequest{}, nullptr),
+              MatchError::kUnknownPlayer);
 }
 
 UTEST(MatchManager, LegalMoveFlowWithHistory) {
     MatchManager manager(42);
-    const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
+    const auto match_id = manager.CreateMatch(
+        {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt);
     ASSERT_TRUE(match_id.has_value());
-    auto state = manager.GetMatchState(*match_id, 1);
+    auto state = manager.GetMatchState(*match_id, 1, nullptr);
     ASSERT_TRUE(state.has_value());
     const Card attack_card = state->your_hand.front();
     durak::match::MatchMove applied;
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}, &applied), MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(
+                  *match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}, &applied),
+              MatchError::kOk);
     EXPECT_EQ(applied.player_id, 1);
     EXPECT_EQ(applied.type, ActionType::kCard);
     EXPECT_EQ(applied.stack, 0);
     EXPECT_EQ(applied.sequence, 1u);
     EXPECT_EQ(applied.card, attack_card);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kTransfer}), MatchError::kOk);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}), MatchError::kNotThisPlayersTurn);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kTransfer}), MatchError::kIllegalMove);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kGrab}), MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kTransfer}, nullptr),
+              MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(
+                  *match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}, nullptr),
+              MatchError::kNotThisPlayersTurn);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kTransfer}, nullptr),
+              MatchError::kIllegalMove);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kGrab}, nullptr),
+              MatchError::kOk);
     auto error = MatchError::kOk;
     const auto history = manager.GetMatchHistory(*match_id, &error);
     ASSERT_TRUE(history.has_value());
@@ -124,7 +149,7 @@ UTEST(MatchManager, LegalMoveFlowWithHistory) {
     EXPECT_EQ(history->at(2).player_id, 2);
     EXPECT_EQ(history->at(2).sequence, 3u);
     EXPECT_EQ(error, MatchError::kOk);
-    auto after_grab = manager.GetMatchState(*match_id, 1);
+    auto after_grab = manager.GetMatchState(*match_id, 1, nullptr);
     ASSERT_TRUE(after_grab.has_value());
     EXPECT_EQ(after_grab->attacker_id, 1);
     EXPECT_TRUE(after_grab->table[0].empty());
@@ -132,14 +157,19 @@ UTEST(MatchManager, LegalMoveFlowWithHistory) {
 
 UTEST(MatchManager, ReplayTextIsCompatibleWithStateReplay) {
     MatchManager manager(42);
-    const auto match_id = manager.CreateMatch({MakePlayer(1, "Alice"), MakePlayer(2, "Bob")});
+    const auto match_id = manager.CreateMatch(
+        {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt);
     ASSERT_TRUE(match_id.has_value());
-    auto state = manager.GetMatchState(*match_id, 1);
+    auto state = manager.GetMatchState(*match_id, 1, nullptr);
     ASSERT_TRUE(state.has_value());
     const Card attack_card = state->your_hand.front();
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}), MatchError::kOk);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kTransfer}), MatchError::kOk);
-    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kGrab}), MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(
+                  *match_id, 1, MoveRequest{ActionType::kCard, attack_card, 0}, nullptr),
+              MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 1, MoveRequest{ActionType::kTransfer}, nullptr),
+              MatchError::kOk);
+    EXPECT_EQ(manager.ApplyMove(*match_id, 2, MoveRequest{ActionType::kGrab}, nullptr),
+              MatchError::kOk);
     MatchError error = MatchError::kOk;
     const auto replay = manager.GetReplayText(*match_id, &error);
     ASSERT_TRUE(replay.has_value());
@@ -176,17 +206,20 @@ UTEST(Match, WinConfirmsEmptyHand) {
     const std::size_t history_size = match.GetHistory().size();
     EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kWin}), MatchError::kOk);
     EXPECT_EQ(match.GetHistory().size(), history_size);
-    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{1, 6}, 0}), MatchError::kMatchAlreadyFinished);
+    EXPECT_EQ(match.ApplyMove(2, MoveRequest{ActionType::kCard, Card{1, 6}, 0}),
+              MatchError::kMatchAlreadyFinished);
 }
 
 UTEST(Match, WinRequiresFinishedSession) {
-    Match match("m-win-early", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt, 1);
+    Match match("m-win-early", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")},
+                std::nullopt, 1);
     EXPECT_EQ(match.ApplyMove(1, MoveRequest{ActionType::kWin}), MatchError::kIllegalMove);
     EXPECT_FALSE(match.IsFinished());
 }
 
 UTEST(Match, ResignFinishesMatch) {
-    Match match("m-resign", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")}, std::nullopt, 1);
+    Match match("m-resign", {MakePlayer(1, "Alice"), MakePlayer(2, "Bob")},
+                std::nullopt, 1);
     EXPECT_EQ(match.Resign(1), MatchError::kOk);
     EXPECT_TRUE(match.IsFinished());
     const auto outcome = match.GetResult();

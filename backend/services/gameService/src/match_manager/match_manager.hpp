@@ -1,4 +1,6 @@
 #pragma once
+#include <memory>
+#include <utility>
 #include <mutex>
 #include <optional>
 #include <random>
