@@ -60,10 +60,8 @@ const Game = (() => {
             if (active && !finished) loadState(false);
         });
 
-        window.addEventListener('beforeunload', resignOnUnload);
-        window.addEventListener('pagehide', event => {
-            if (!event || !event.persisted) resignOnUnload();
-        });
+        // Сдаться при выходе из браузера больше не отправляется: закрытие
+        // вкладки не влияет на партию — к ней можно вернуться из меню.
     }
 
     function start(opts = {}) {
@@ -575,22 +573,6 @@ const Game = (() => {
             }
         }
         if (active && !finished) await finishGame(null);
-    }
-
-    function resignOnUnload() {
-        if (!active || finished || !gameId) return;
-        const token = Api.getToken();
-        if (!token) return;
-        try {
-            fetch(new URL(
-                '/api/games/' + encodeURIComponent(gameId) + '/resign',
-                CONFIG.apiBase + '/'
-            ), {
-                method: 'POST',
-                headers: { Authorization: 'Bearer ' + token },
-                keepalive: true,
-            }).catch(() => { });
-        } catch (e) { }
     }
 
     function startPolling() {

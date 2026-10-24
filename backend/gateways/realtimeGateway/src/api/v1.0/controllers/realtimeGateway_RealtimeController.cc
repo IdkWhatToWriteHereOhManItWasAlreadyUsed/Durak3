@@ -31,8 +31,6 @@ static Json::Value NewError(const std::string& code, const std::string& message)
     return payload;
 }
 
-// Ошибка апстрима: отдаём клиенту распарсенные code/message из тела
-// game-service (а не сырую JSON-строку внутри message).
 static Json::Value UpstreamError(const HttpResponsePtr& response,
                                  const std::string& fallbackCode) {
     Json::Value body;
@@ -59,16 +57,6 @@ RealtimeController::RealtimeController() {
 }
 
 void RealtimeController::EnsureSubscriber() {
-    // Подписку выполняем один раз, лениво: в конструкторе контроллера
-    // (registerController до app().run()) getRedisClient() вернет нулевой
-    // указатель, т.к. redis-клиенты создаются только в run() — это и был
-    // segfault. Клиент берется из конфига: top-level "redis_clients" в
-    // config.json (https://drogonframework.github.io/drogon-docs/#/ENG/ENG-18-Redis):
-    // клиенты задаются без "name" → клиент под "default" → getRedisClient()
-    // без аргументов. Drogon сам резолвит hostname ("redis") внутри
-    // RedisConnection — ручной RedisClient::newRedisClient(InetAddress(...))
-    // тут ломался: inet_pton в trantor::InetAddress не переваривает имена
-    // хостов и отправлял "0.0.0.0" в DNS-резолвер.
     std::call_once(m_subscriberOnce, [this] {
         m_redisClient = app().getRedisClient();
         if (!m_redisClient) {
