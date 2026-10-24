@@ -13,8 +13,9 @@ services:
       - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Схема БД auth применяется контейнером migrate-auth (Liquibase).
+      # Здесь остаётся только создание вспомогательных БД (matchmaking).
       - ./backend/services/authService/postgresql/00-create-databases.sql:/docker-entrypoint-initdb.d/00-create-databases.sql:ro
-      - ./backend/services/authService/postgresql/schemas/db_1.sql:/docker-entrypoint-initdb.d/01-auth-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${AUTH_DB_NAME}"]
       interval: 5s
