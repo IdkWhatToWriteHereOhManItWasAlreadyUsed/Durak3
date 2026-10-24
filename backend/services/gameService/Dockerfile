@@ -5,7 +5,7 @@ ARG BUILD_TYPE=Debug
 
 FROM ghcr.io/userver-framework/ubuntu-22.04-userver:latest AS builder
 ARG BUILD_TYPE
-ENV BUILD_TYPE=Debug
+ENV BUILD_TYPE=Release
 
 WORKDIR /app
 
