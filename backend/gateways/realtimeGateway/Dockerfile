@@ -89,7 +89,12 @@ COPY config /app/config
 
 EXPOSE 8080
 
-CMD if [ "$BUILD_TYPE" = "Debug" ]; then \
+# Подстановка passwd в конфиге из env REDIS_PASSWORD. Поле "passwd" перезаписывается
+# только когда переменная задана (в compose она приходит из .env); либо — значение из файла.
+CMD if [ -n "${REDIS_PASSWORD:-}" ]; then \
+        sed -E -i "s/\"passwd\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"passwd\": \"${REDIS_PASSWORD}\"/" /app/config/app/config.json; \
+    fi && \
+    if [ "$BUILD_TYPE" = "Debug" ]; then \
         gdbserver :12345 /app/realtimeGateway; \
     else \
         /app/realtimeGateway; \

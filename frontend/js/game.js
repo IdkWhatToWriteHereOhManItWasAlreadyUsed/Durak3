@@ -24,6 +24,7 @@ const Game = (() => {
     let pollInFlight = false;
     let winSent = false;
     let gen = 0;
+    let pending = null; // WS-ход в полёте: { requestId, timer }
 
     const el = {};
 
@@ -54,6 +55,7 @@ const Game = (() => {
 
         Realtime.on('game.state', onRealtimeState);
         Realtime.on('game.finished', onRealtimeFinished);
+        Realtime.on('error', onRealtimeError);
         Realtime.on('connected', () => {
             if (active && !finished) loadState(false);
         });
@@ -110,6 +112,7 @@ const Game = (() => {
         active = false;
         finished = true;
         busy = true;
+        clearPending();
         stopTurnTimer();
         stopPolling();
         if (el.time) el.time.textContent = '';
@@ -208,9 +211,7 @@ const Game = (() => {
         if (!handEmpty || !tableEmpty || (state.deckSize || 0) > 0) return;
 
         winSent = true;
-        Api.games.move(gameId, { type: 'WIN' })
-            .then(data => { if (active) applyState(data); })
-            .catch(() => { });
+        deliverMove({ type: 'WIN' });
     }
 
     function refresh() {
@@ -373,13 +374,52 @@ const Game = (() => {
         refresh();
     }
 
-    async function sendMove(move, message) {
+    // Ход через WebSocket: гейтвейт (OnGameMove) сам дергает game-service
+    // и пушит game.state ходившему и сопернику. Ответ ловим в
+    // onRealtimeState, ошибку — в onRealtimeError.
+    // Если сокет умер или ответ не пришел — страховка через REST.
+    function sendMove(move, message) {
         if (busy || finished || !active) return;
 
         busy = true;
         setStatus(message);
         refresh();
+        deliverMove(move);
+    }
 
+    function deliverMove(move) {
+        if (finished || !active) return;
+        if (Realtime.isConnected()) sendMoveOverWs(move);
+        else sendMoveOverRest(move);
+    }
+
+    function sendMoveOverWs(move) {
+        const requestId = 'mv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        clearPending();
+
+        // Сокет открыт при вызове, но Realtime.send может все равно
+        // положить сообщение в очередь (ставит его безопасно) — тогда
+        // оно уйдет при переподключении, а таймаут ниже подстрахует.
+        Realtime.send('game.move', {
+            gameId,
+            requestId,
+            type: move.type,
+            card: move.card,
+            stack: move.stack,
+        });
+
+        pending = { requestId };
+        pending.timer = setTimeout(() => {
+            if (!pending || pending.requestId !== requestId) return;
+            resolvePending();
+            if (!active || finished) return;
+            setStatus('Нет ответа по WebSocket, обновляю состояние…');
+            loadState(false).catch(() => { });
+        }, CONFIG.requestTimeoutMs);
+    }
+
+    async function sendMoveOverRest(move) {
+        clearPending();
         try {
             const data = await Api.games.move(gameId, move);
             if (active) applyState(data);
@@ -392,9 +432,21 @@ const Game = (() => {
             }
             await loadState(false);
         } finally {
-            busy = false;
+            clearPending();
             if (active && !finished) refresh();
         }
+    }
+
+    function clearPending() {
+        if (pending && pending.timer) clearTimeout(pending.timer);
+        pending = null;
+    }
+
+    function resolvePending() {
+        if (!pending) return;
+        clearPending();
+        busy = false;
+        if (active && !finished) refresh();
     }
 
     function onMoveTransfer() {
@@ -560,6 +612,9 @@ const Game = (() => {
         if (!data) return;
         if (data.gameId && gameId && data.gameId !== gameId) return;
 
+        // Свежий state — ответ на наш WS-ход (или актуализация от гейтвея).
+        if (pending) resolvePending();
+
         if (data.yourHand !== undefined || data.table !== undefined || data.currentPlayerId !== undefined) {
             applyState(data);
         } else {
@@ -574,11 +629,45 @@ const Game = (() => {
         finishGame(result || null);
     }
 
+    function onRealtimeError(payload) {
+        if (!active || finished || !payload) return;
+        if (!pending) return; // не наш запрос (heartbeat и т.п.) — не мешаем
+
+        const requestId = typeof payload.requestId === 'string' ? payload.requestId : '';
+        if (requestId && pending.requestId !== requestId) return;
+
+        resolvePending();
+
+        let message = payload.message || '';
+        // Старые версии гейтвея могли прислать JSON-тело game-service строкой
+        if (typeof message === 'string' && message.charAt(0) === '{') {
+            try {
+                const inner = JSON.parse(message);
+                message = inner.message || inner.code || message;
+            } catch (e) { }
+        }
+        const code = payload.code || '';
+
+        if (code === 'NOT_YOUR_TURN') {
+            setStatus('Сейчас не Ваш ход!');
+        } else if (code === 'ILLEGAL_MOVE') {
+            setStatus('Эту карту сюда положить нельзя!');
+        } else if (code === 'GAME_FINISHED') {
+            setStatus('Партия уже завершена');
+        } else {
+            setStatus('Ошибка хода: ' + (message || code || 'нет ответа'));
+        }
+
+        // После отказа могло что-то поменяться — подтягиваем актуальное
+        loadState(false).catch(() => { });
+    }
+
     async function finishGame(result) {
         if (finished || !active) return;
 
         finished = true;
         busy = true;
+        clearPending();
         stopTurnTimer();
         stopPolling();
         const myGen = gen;

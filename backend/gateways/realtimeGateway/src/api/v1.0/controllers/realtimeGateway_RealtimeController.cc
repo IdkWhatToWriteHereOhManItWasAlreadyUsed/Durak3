@@ -1,9 +1,7 @@
 #include "realtimeGateway_RealtimeController.h"
 
-#include <cstdlib>
-
 #include <drogon/HttpAppFramework.h>
-#include <trantor/net/InetAddress.h>
+#include <trantor/utils/Logger.h>
 
 #include <string>
 #include <vector>
@@ -20,13 +18,6 @@ SessionManager& Sessions() {
 
 static Json::FastWriter kFastWriter;
 
-static std::string GetRedisPassword() {
-    if (const char* env = std::getenv("REDIS_PASSWORD")) {
-        return env;
-    }
-    return app().getCustomConfig()["redis_password"].asString();
-}
-
 static std::string str(const Json::Value& value, const char* fallback = "") {
     return value.isString() ? value.asString()
            : value.isInt64() ? std::to_string(value.asInt64())
@@ -40,32 +31,68 @@ static Json::Value NewError(const std::string& code, const std::string& message)
     return payload;
 }
 
+// Ошибка апстрима: отдаём клиенту распарсенные code/message из тела
+// game-service (а не сырую JSON-строку внутри message).
+static Json::Value UpstreamError(const HttpResponsePtr& response,
+                                 const std::string& fallbackCode) {
+    Json::Value body;
+    if (response) {
+        Json::Reader reader;
+        reader.parse(std::string(response->body()), body);
+    }
+    std::string code = fallbackCode;
+    std::string message = fallbackCode;
+    if (body.isObject()) {
+        if (body["code"].isString()) code = body["code"].asString();
+        if (body.isMember("message")) message = str(body["message"]);
+        if (message.empty()) message = code;
+    }
+    return NewError(code, message);
+}
+
 RealtimeController::RealtimeController() {
     const auto& custom = app().getCustomConfig();
     m_authClient = HttpClient::newHttpClient(custom["auth"].asString());
     m_lobbyClient = HttpClient::newHttpClient(custom["lobby"].asString());
     m_matchmakingClient = HttpClient::newHttpClient(custom["matchmaking"].asString());
     m_gameClient = HttpClient::newHttpClient(custom["game"].asString());
-    m_redisClient = RedisClient::newRedisClient(
-        trantor::InetAddress(custom["redis_host"].asString(),
-                             static_cast<uint16_t>(custom["redis_port"].asUInt())),
-        1,
-        GetRedisPassword(),
-        custom["redis_db"].asUInt());
+}
 
-    m_subscriber = m_redisClient->newSubscriber();    for (const std::string channel :
-         {"invite.created", "invite.accepted", "invite.declined",
-          "game.started", "game.move", "game.finished",
-          "presence.online", "presence.offline", "auth.logged_out"}) {
-        m_subscriber->subscribe(channel, [this](const std::string& ch,
-                                                const std::string& message) {
-            DispatchEvent(ch, message);
-        });
-    }
+void RealtimeController::EnsureSubscriber() {
+    // Подписку выполняем один раз, лениво: в конструкторе контроллера
+    // (registerController до app().run()) getRedisClient() вернет нулевой
+    // указатель, т.к. redis-клиенты создаются только в run() — это и был
+    // segfault. Клиент берется из конфига: top-level "redis_clients" в
+    // config.json (https://drogonframework.github.io/drogon-docs/#/ENG/ENG-18-Redis):
+    // клиенты задаются без "name" → клиент под "default" → getRedisClient()
+    // без аргументов. Drogon сам резолвит hostname ("redis") внутри
+    // RedisConnection — ручной RedisClient::newRedisClient(InetAddress(...))
+    // тут ломался: inet_pton в trantor::InetAddress не переваривает имена
+    // хостов и отправлял "0.0.0.0" в DNS-резолвер.
+    std::call_once(m_subscriberOnce, [this] {
+        m_redisClient = app().getRedisClient();
+        if (!m_redisClient) {
+            LOG_ERROR << "redis client 'default' is not configured "
+                      << "(missing redis_clients in config.json); realtime events disabled";
+            return;
+        }
+        m_subscriber = m_redisClient->newSubscriber();
+        for (const std::string channel :
+             {"invite.created", "invite.accepted", "invite.declined",
+              "game.started", "game.move", "game.finished",
+              "presence.online", "presence.offline", "auth.logged_out"}) {
+            m_subscriber->subscribe(channel, [this](const std::string& ch,
+                                                    const std::string& message) {
+                DispatchEvent(ch, message);
+            });
+        }
+        LOG_INFO << "Redis subscriber initialized";
+    });
 }
 
 void RealtimeController::handleNewConnection(const HttpRequestPtr& req,
                                              const WebSocketConnectionPtr& wsPtr) {
+    EnsureSubscriber();
     auto session = std::make_shared<WSSession>();
     session->playerId = req->getAttributes()->get<int64_t>("userId");
     session->token = req->getAttributes()->get<std::string>("token");
@@ -247,6 +274,9 @@ void RealtimeController::OnInviteAccept(const WSSession::Ptr& session,
 
 void RealtimeController::OnGameMove(const WSSession::Ptr& session,
                                     Json::Value payload) {
+    const std::string requestId =
+        payload["requestId"].isString() ? payload["requestId"].asString() : "";
+
     std::string gameId;
     if (payload.isMember("gameId")) {
         gameId = str(payload["gameId"]);
@@ -254,9 +284,11 @@ void RealtimeController::OnGameMove(const WSSession::Ptr& session,
         gameId = Sessions().LastGameOf(session->playerId);
     }
     if (gameId.empty()) {
+        Json::Value err = NewError("GAME_NOT_FOUND", "no active game for player");
+        if (!requestId.empty()) err["requestId"] = requestId;
         Json::Value out(Json::objectValue);
         out["type"] = "error";
-        out["payload"] = NewError("GAME_NOT_FOUND", "no active game for player");
+        out["payload"] = err;
         session->connection->send(kFastWriter.write(out));
         return;
     }
@@ -273,12 +305,14 @@ void RealtimeController::OnGameMove(const WSSession::Ptr& session,
     auto client = m_gameClient;
     client->sendRequest(
         downstream,
-        [this, session, gameId](ReqResult result, const HttpResponsePtr& response) {
+        [this, session, gameId, requestId](ReqResult result, const HttpResponsePtr& response) {
             if (result != ReqResult::Ok || !response) {
+                Json::Value err = NewError("SERVICE_UNAVAILABLE",
+                                           "game-service is unreachable");
+                if (!requestId.empty()) err["requestId"] = requestId;
                 Json::Value out(Json::objectValue);
                 out["type"] = "error";
-                out["payload"] = NewError("SERVICE_UNAVAILABLE",
-                                          "game-service is unreachable");
+                out["payload"] = err;
                 session->connection->send(kFastWriter.write(out));
                 return;
             }
@@ -295,9 +329,11 @@ void RealtimeController::OnGameMove(const WSSession::Ptr& session,
                 }
                 return;
             }
+            Json::Value err = UpstreamError(response, "GAME_SERVICE");
+            if (!requestId.empty()) err["requestId"] = requestId;
             Json::Value out(Json::objectValue);
             out["type"] = "error";
-            out["payload"] = NewError("GAME_SERVICE", std::string(response->body()));
+            out["payload"] = err;
             session->connection->send(kFastWriter.write(out));
         },
         5);

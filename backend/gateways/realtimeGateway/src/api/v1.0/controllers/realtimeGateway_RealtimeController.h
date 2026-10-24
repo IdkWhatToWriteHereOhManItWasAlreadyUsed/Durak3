@@ -8,6 +8,8 @@
 
 #include <services/SessionManager.h>
 
+#include <mutex>
+
 using namespace drogon;
 
 namespace realtimeGateway {
@@ -43,11 +45,17 @@ private:
 
     void SendState(const std::string& gameId, int64_t playerId);
 
+    // Redis-клиент готов только после app().run() — берём и подписываемся
+    // при первом входящем WS-соединении (оно возможно не раньше, чем
+    // слушатель стартует, т.е. после createRedisClients).
+    void EnsureSubscriber();
+
     HttpClientPtr m_authClient;
     HttpClientPtr m_lobbyClient;
     HttpClientPtr m_matchmakingClient;
     HttpClientPtr m_gameClient;
     nosql::RedisClientPtr m_redisClient;
     std::shared_ptr<nosql::RedisSubscriber> m_subscriber;
+    std::once_flag m_subscriberOnce;
 };
 }  // namespace realtimeGateway

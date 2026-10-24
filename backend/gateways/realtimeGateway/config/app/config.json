@@ -9,14 +9,21 @@
     "app": {
         "threads_num": 4
     },
-    "custom_config" : {
+    "redis_clients": [
+        {
+            "host": "redis",
+            "port": 6379,
+            "passwd": "",
+            "db": 0,
+            "is_fast": false,
+            "number_of_connections": 2,
+            "timeout": -1.0
+        }
+    ],
+    "custom_config": {
         "auth":        "http://auth-service:8080",
         "lobby":       "http://lobby-service:8080",
         "matchmaking": "http://matchmaking-service:8080",
-        "game":        "http://game-service:8080",
-        "redis_host":  "redis",
-        "redis_port":  6379,
-        "redis_db":    0,
-        "redis_password": ""
+        "game":        "http://game-service:8080"
     }
 }
