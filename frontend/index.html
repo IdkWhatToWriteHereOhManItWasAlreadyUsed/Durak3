@@ -9,11 +9,10 @@
 </head>
 <body>
 
-<!-- ============================== Вход ================================= -->
 <div id="screen-login" class="screen active">
     <div class="login-window">
         <div class="login-logo">ДУРАК</div>
-        <div class="login-sub">Ассемблерная Битва — онлайн</div>
+        <div class="login-sub">Онлайн-игра на двоих</div>
 
         <button id="btnGoogleLogin" class="google-btn">
             <span class="google-g">G</span>
@@ -24,12 +23,12 @@
     </div>
 </div>
 
-<!-- ============================ Главное меню =========================== -->
 <div id="screen-menu" class="screen">
     <div class="menu-window">
         <div class="menu-topbar">
             <div class="user-chip">
-                <span class="user-mark">&#9824;</span>
+                <img id="userAvatar" class="user-avatar hidden" alt="" referrerpolicy="no-referrer" />
+                <span id="userMark" class="user-mark">&#9824;</span>
                 <div class="user-text">
                     <span id="userName" class="user-name"></span>
                     <span id="userId" class="user-id"></span>
@@ -44,7 +43,6 @@
         <div class="menu-tabs">
             <button class="menu-tab active" data-tab="find">Найти игру</button>
             <button class="menu-tab" data-tab="rules">Правила</button>
-            <button class="menu-tab" data-tab="replays">Повторы игр</button>
         </div>
 
         <div class="menu-body">
@@ -69,7 +67,7 @@
 
             <section id="tab-rules" class="tab-panel">
                 <div class="rules">
-                    <h2>Дурак: Ассемблерная Битва</h2>
+                    <h2>Дурак</h2>
                     <p class="rules-quote">«Чушпан в долгах, пахан в ярости. Одна игра решит всё.»</p>
                     <h3>Цель игры</h3>
                     <p>Первым избавиться от всех карт. Последний игрок с картами на руках становится «дураком».</p>
@@ -91,38 +89,15 @@
                     </ul>
                 </div>
             </section>
-
-            <section id="tab-replays" class="tab-panel">
-                <div class="find-bar">
-                    <button id="refreshReplays" class="btn-primary">Обновить список повторов</button>
-                </div>
-                <div class="hint-label">Доступные повторы</div>
-                <div class="grid-wrap">
-                    <table id="replaysGrid" class="grid">
-                        <thead>
-                            <tr>
-                                <th>Игрок 1</th>
-                                <th>Игрок 2</th>
-                                <th>Дата</th>
-                                <th>Ходы</th>
-                                <th>Повтор</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
-                </div>
-                <div class="progress"><div id="replayProgress" class="progress-fill"></div></div>
-            </section>
         </div>
 
         <div class="menu-banner">
             <span>ДУРАК</span>
-            <small>Ассемблерная Битва — веб-версия</small>
+            <small>Веб-версия</small>
         </div>
     </div>
 </div>
 
-<!-- ============================ Игровой экран ========================== -->
 <div id="screen-game" class="screen">
     <div class="game-layout">
         <div class="game-left">
@@ -149,29 +124,6 @@
     </div>
 </div>
 
-<!-- ============================== Повторы ============================== -->
-<div id="screen-replay" class="screen">
-    <div class="game-layout">
-        <div class="game-left">
-            <div class="game-topbar">
-                <span id="replayMsg" class="lbl-info"></span>
-                <span id="replayPlayers" class="lbl-time"></span>
-            </div>
-            <div class="canvas-holder">
-                <canvas id="replayCanvas" width="800" height="600"></canvas>
-            </div>
-            <div class="page-buttons">
-                <button id="btnPrevMove" class="page-btn wide">&#9664; Назад</button>
-                <button id="btnNextMove" class="page-btn wide">Вперёд &#9654;</button>
-            </div>
-        </div>
-        <div class="game-side">
-            <button id="btnReplayBack" class="btn-ghost side-ghost">В меню</button>
-        </div>
-    </div>
-</div>
-
-<!-- ============================== Модалка ============================== -->
 <div id="modal" class="modal hidden">
     <div class="modal-box">
         <h3 id="modalTitle">Приглашение в игру</h3>
@@ -202,13 +154,11 @@
 <script src="js/realtime.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/cards.js"></script>
-<script src="js/engine.js"></script>
 <script src="js/state.js"></script>
 <script src="js/render.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/lobby.js"></script>
 <script src="js/game.js"></script>
-<script src="js/replay.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

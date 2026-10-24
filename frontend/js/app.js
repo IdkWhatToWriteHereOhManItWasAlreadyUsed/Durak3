@@ -8,7 +8,7 @@ const App = (() => {
     let loadingDepth = 0;
 
     function init() {
-        ['login', 'menu', 'game', 'replay'].forEach(name => {
+        ['login', 'menu', 'game'].forEach(name => {
             screens[name] = document.getElementById('screen-' + name);
         });
 
@@ -41,7 +41,6 @@ const App = (() => {
 
         Lobby.init();
         Game.init();
-        Replay.init();
         Auth.init();
     }
 
@@ -64,13 +63,6 @@ const App = (() => {
         Lobby.leave();
         showScreen('game');
         Game.start(opts);
-    }
-
-    async function openReplay(replayId, summary) {
-        if (typeof Game !== 'undefined') Game.stop();
-        Lobby.leave();
-        showScreen('replay');
-        Replay.open(replayId, summary);
     }
 
     function showModal(opts = {}) {
@@ -114,10 +106,6 @@ const App = (() => {
         modalOpen = true;
     }
 
-    /**
-     * @param {string=} owner Закрывает модалку только если она принадлежит owner.
-     * @returns {boolean} true, если модалка действительно закрыта.
-     */
     function hideModal(owner) {
         if (owner && modalOwner !== owner) return false;
         modalEls.root.classList.add('hidden');
@@ -171,7 +159,6 @@ const App = (() => {
         showScreen,
         goMenu,
         startGame,
-        openReplay,
         showModal,
         hideModal,
         setModalProgress,

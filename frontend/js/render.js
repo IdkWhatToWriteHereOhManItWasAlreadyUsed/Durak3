@@ -22,16 +22,9 @@ class GameRenderer {
         ctx.fillRect(0, 0, W, H);
 
         this._drawStacks(session);
-
-        if (opts.replay) {
-            this._drawOpponentReplay(session);
-            this._drawPlayerReplay(session);
-        } else {
-            this._drawOpponent(session);
-            this._drawPlayer(session, opts);
-        }
+        this._drawOpponent(session);
+        this._drawPlayer(session, opts);
         this._drawDeck(session);
-
         this._drawStatus(session, opts);
         this._drawSelected(session, opts);
     }
@@ -79,10 +72,6 @@ class GameRenderer {
         }
     }
 
-    _drawDeckReplay(session) {
-        this._drawDeck(session);
-    }
-
     _drawOpponent(session) {
         const { ctx } = this;
         const { W, DIST } = FIELD;
@@ -92,16 +81,6 @@ class GameRenderer {
             const x = W / 2 + (DIST / 2) * count - i;
             CardAssets.drawBack(ctx, x, -20, CARD_W, CARD_H);
         }
-    }
-
-    _drawOpponentReplay(session) {
-        const { ctx } = this;
-        const { W, CARD_W, CARD_H, DIST } = FIELD;
-        const cards = session.PlayerCards[1];
-        const start = W / 2 - CARD_W / 2 - 6 * cards.length;
-        cards.forEach((card, i) => {
-            if (card) CardAssets.drawCard(ctx, card, 12 * i + start, DIST, CARD_W, CARD_H);
-        });
     }
 
     _drawPlayer(session, opts) {
@@ -119,19 +98,7 @@ class GameRenderer {
         }
     }
 
-    _drawPlayerReplay(session) {
-        const { ctx } = this;
-        const { W, H, CARD_W, CARD_H, DIST } = FIELD;
-        const cards = session.PlayerCards[0];
-        const start = W / 2 - CARD_W / 2 - 6 * cards.length;
-        const y = H - CARD_H - DIST;
-        cards.forEach((card, i) => {
-            if (card) CardAssets.drawCard(ctx, card, i * 12 + start, y, CARD_W, CARD_H);
-        });
-    }
-
     _drawSelected(session, opts) {
-        if (opts.replay) return;
         if (opts.selectedCard == null || opts.selectedCard === -1 || !opts.cursor) return;
         const hand = session.PlayerCards[0];
         const card = hand[opts.selectedCard];
@@ -145,7 +112,7 @@ class GameRenderer {
         );
     }
 
-    _drawStatus(session, opts) {
+    _drawStatus(session) {
         const { ctx } = this;
         const { W } = FIELD;
         ctx.save();
@@ -163,7 +130,7 @@ class GameRenderer {
         ctx.fillStyle = suitRed ? '#ff6b6b' : '#ffffff';
         ctx.fillText(suitSym, 12 + tw, 34);
 
-        if (!opts.replay && typeof session.isAttackerTurn === 'function') {
+        if (typeof session.isAttackerTurn === 'function') {
             ctx.fillStyle = '#ffe082';
             const who = session.isAttackerTurn()
                 ? (session.CurrPlayerMove === 0 ? 'Вы атакуете' : 'Соперник атакует')

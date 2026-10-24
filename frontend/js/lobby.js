@@ -1,17 +1,3 @@
-/**
- * Главное меню: присутствие в лобби, онлайн-игроки, приглашения,
- * активные матчи и список повторов.
- *
- * Используются эндпоинты api-gateway:
- *   POST/DELETE /api/lobby/presence
- *   POST       /api/lobby/presence/{sessionId}/heartbeat
- *   GET        /api/lobby/players
- *   POST       /api/invites
- *   GET        /api/invites?direction=incoming&status=pending
- *   POST       /api/invites/{id}/accept|decline|cancel
- *   GET        /api/matches?status=active
- *   GET        /api/replays
- */
 const Lobby = (() => {
     const el = {};
 
@@ -25,8 +11,8 @@ const Lobby = (() => {
     let playersTimer = null;
     let invitesTimer = null;
 
-    let outgoing = null;             // { invite, opponent, deadline, ... }
-    let currentIncoming = null;      // Invite, который сейчас в модалке
+    let outgoing = null;
+    let currentIncoming = null;
     let currentIncomingDeadline = 0;
     let currentIncomingTotal = 1;
     let incomingCountdown = null;
@@ -44,14 +30,10 @@ const Lobby = (() => {
 
     function init() {
         el.playersBody = document.querySelector('#playersGrid tbody');
-        el.replaysBody = document.querySelector('#replaysGrid tbody');
-        el.replayProgress = document.getElementById('replayProgress');
         el.resumeButton = document.getElementById('resumeGame');
 
         const refreshPlayersBtn = document.getElementById('refreshList');
-        const refreshReplaysBtn = document.getElementById('refreshReplays');
         if (refreshPlayersBtn) refreshPlayersBtn.addEventListener('click', refreshPlayers);
-        if (refreshReplaysBtn) refreshReplaysBtn.addEventListener('click', refreshReplays);
         if (el.resumeButton) el.resumeButton.addEventListener('click', resumeActiveMatch);
 
         document.querySelectorAll('.menu-tab').forEach(tab => {
@@ -62,11 +44,9 @@ const Lobby = (() => {
                 const panel = document.getElementById('tab-' + tab.dataset.tab);
                 if (panel) panel.classList.add('active');
                 if (tab.dataset.tab === 'find') refreshPlayers();
-                if (tab.dataset.tab === 'replays') refreshReplays();
             });
         });
 
-        // Realtime-события (realtime-gateway/openapi.yaml).
         Realtime.on('invite.created', onRealtimeInviteCreated);
         Realtime.on('invite.accepted', onRealtimeInviteAccepted);
         Realtime.on('invite.declined', onRealtimeInviteDeclined);
@@ -87,8 +67,6 @@ const Lobby = (() => {
         window.addEventListener('beforeunload', () => closePresence(true));
     }
 
-    /* ----------------------------- lifecycle ------------------------------ */
-
     async function enter() {
         if (active) return;
 
@@ -97,8 +75,6 @@ const Lobby = (() => {
         incomingInvites = new Map();
         currentIncoming = null;
 
-        // Ждём завершения предыдущего DELETE /presence, чтобы не открыть
-        // сессию, которую тут же закроет старый запрос.
         if (presenceClosing) await presenceClosing;
         if (!active) return;
 
@@ -111,7 +87,6 @@ const Lobby = (() => {
         startTimers();
         refreshPlayers();
         refreshIncomingInvites();
-        refreshReplays();
         loadResumeMatch();
     }
 
@@ -149,8 +124,6 @@ const Lobby = (() => {
         invitesTimer = null;
     }
 
-    /* ----------------------------- presence ------------------------------- */
-
     async function openPresence() {
         try {
             const presence = await Api.lobby.openPresence('in_lobby');
@@ -186,13 +159,11 @@ const Lobby = (() => {
                     headers: { Authorization: 'Bearer ' + Api.getToken() },
                     keepalive: true,
                 }).catch(() => {});
-            } catch (e) { /* ignore */ }
+            } catch (e) { }
         } else {
             Api.lobby.closePresence();
         }
     }
-
-    /* ------------------------------ players ------------------------------- */
 
     async function refreshPlayers() {
         if (!active || playersLoading) return;
@@ -254,8 +225,6 @@ const Lobby = (() => {
             el.playersBody.appendChild(tr);
         }
     }
-
-    /* ------------------------- outgoing invitation ------------------------ */
 
     async function invitePlayer(player) {
         if (!active) return;
@@ -391,7 +360,7 @@ const Lobby = (() => {
         finishOutgoing();
         Sound.stop();
         if (!silent) {
-            try { await Api.invites.cancel(inviteId); } catch (e) { /* уже обработано */ }
+            try { await Api.invites.cancel(inviteId); } catch (e) { }
             App.toast('Приглашение отменено');
         } else {
             Api.invites.cancel(inviteId).catch(() => {});
@@ -408,8 +377,6 @@ const Lobby = (() => {
         renderPlayers();
         setTimeout(showNextIncoming, 250);
     }
-
-    /* ------------------------- incoming invitation ------------------------ */
 
     async function refreshIncomingInvites() {
         if (!active || incomingLoading) return;
@@ -433,7 +400,6 @@ const Lobby = (() => {
                 }
             }
 
-            // Убираем приглашения, которые больше не pending.
             for (const id of Array.from(incomingInvites.keys())) {
                 if (!pendingIds.has(id)) incomingInvites.delete(id);
             }
@@ -446,7 +412,7 @@ const Lobby = (() => {
 
             showNextIncoming();
         } catch (e) {
-            if (e.status !== 401) { /* тихо: следующий poll повторит */ }
+            if (e.status !== 401) { }
         } finally {
             incomingLoading = false;
         }
@@ -561,7 +527,7 @@ const Lobby = (() => {
         incomingInvites.delete(invite.id);
         seenIncoming.delete(invite.id);
 
-        try { await Api.invites.decline(invite.id); } catch (e) { /* уже обработано */ }
+        try { await Api.invites.decline(invite.id); } catch (e) { }
         Sound.stop();
         App.toast('Приглашение отклонено');
         incomingBusy = false;
@@ -578,8 +544,6 @@ const Lobby = (() => {
         clearInterval(incomingCountdown);
         incomingCountdown = null;
     }
-
-    /* --------------------------- realtime events -------------------------- */
 
     function onRealtimeInviteCreated(payload) {
         if (!active) return;
@@ -639,8 +603,6 @@ const Lobby = (() => {
         }
     }
 
-    /* ------------------------------- matches ------------------------------ */
-
     function startMatch(match, opponentName) {
         if (!match || !match.gameId) {
             App.toast('Матч создан без gameId', 'error');
@@ -691,81 +653,6 @@ const Lobby = (() => {
         });
     }
 
-    /* -------------------------------- replays ----------------------------- */
-
-    let replaysLoading = false;
-
-    async function refreshReplays() {
-        if (replaysLoading || !el.replaysBody) return;
-        replaysLoading = true;
-        setReplayProgress(15);
-
-        try {
-            const data = await Api.replays.list({ limit: 50, offset: 0 });
-            setReplayProgress(100);
-            renderReplays(Array.isArray(data.items) ? data.items : []);
-        } catch (e) {
-            renderReplays([], e.message);
-            setReplayProgress(0);
-        } finally {
-            replaysLoading = false;
-        }
-    }
-
-    function renderReplays(items, errorText) {
-        el.replaysBody.innerHTML = '';
-
-        if (errorText) {
-            el.replaysBody.innerHTML =
-                `<tr><td colspan="5" class="empty">Не удалось загрузить повторы: ${escapeHtml(errorText)}</td></tr>`;
-            return;
-        }
-        if (!items.length) {
-            el.replaysBody.innerHTML =
-                '<tr><td colspan="5" class="empty">Повторов пока нет — сыграйте партию.</td></tr>';
-            return;
-        }
-
-        for (const replay of items) {
-            const tr = document.createElement('tr');
-
-            const p1 = document.createElement('td');
-            p1.textContent = replay.player1 || '—';
-            tr.appendChild(p1);
-
-            const p2 = document.createElement('td');
-            p2.textContent = replay.player2 || '—';
-            tr.appendChild(p2);
-
-            const date = document.createElement('td');
-            date.textContent = formatDate(replay.createdAt);
-            tr.appendChild(date);
-
-            const moves = document.createElement('td');
-            moves.textContent = Number.isFinite(replay.movesCount) ? replay.movesCount : '—';
-            tr.appendChild(moves);
-
-            const action = document.createElement('td');
-            const button = document.createElement('button');
-            button.className = 'watch-btn';
-            button.textContent = 'Смотреть';
-            button.addEventListener('click', () => {
-                Sound.play('accept');
-                App.openReplay(replay.id, replay);
-            });
-            action.appendChild(button);
-            tr.appendChild(action);
-
-            el.replaysBody.appendChild(tr);
-        }
-    }
-
-    function setReplayProgress(percent) {
-        if (el.replayProgress) el.replayProgress.style.width = percent + '%';
-    }
-
-    /* ------------------------------- helpers ------------------------------ */
-
     function expiresAt(invite, ttlSeconds) {
         if (invite && invite.expiresAt) {
             const value = new Date(invite.expiresAt).getTime();
@@ -778,19 +665,6 @@ const Lobby = (() => {
         return Date.now() + ttlSeconds * 1000;
     }
 
-    function formatDate(value) {
-        if (!value) return '—';
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return '—';
-        return date.toLocaleString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
-            year: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    }
-
     function escapeHtml(value) {
         return String(value).replace(/[&<>"']/g, c => (
             { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -801,5 +675,5 @@ const Lobby = (() => {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    return { init, enter, leave, refreshPlayers, refreshReplays };
+    return { init, enter, leave, refreshPlayers };
 })();

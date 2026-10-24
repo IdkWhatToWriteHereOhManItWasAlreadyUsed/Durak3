@@ -1,16 +1,3 @@
-/**
- * Адаптер серверного GameState (game-service / api-gateway) к виду,
- * который ожидает GameRenderer.
- *
- * Сервер отдаёт:
- *   { gameId, status, trump, deckSize, deckTrumpCard, table, players,
- *     currentPlayerId, attackerId, defenderId, yourHand,
- *     hiddenOpponentCards, movesCount }
- *
- * Рендерер исторически работает с полями локального GameSession:
- *   PlayerCards[0|1], Deck, GameStack, Trump, CurrPlayerMove, CurrPlayerAttacker.
- * Поэтому игрок-зритель всегда отображается как индекс 0, соперник — 1.
- */
 class ServerSession {
     constructor(state, myId) {
         const role = playerRole(state, myId);
@@ -57,17 +44,12 @@ class ServerSession {
         return false;
     }
 
-    /**
-     * Атакующий может положить карту только в пустую стопку. Если стол
-     * пуст — любую карту, иначе — карту того же достоинства, что уже есть
-     * на столе (подкидывание).
-     */
     canPush(card, stack) {
         if (!stack) return false;
         if (!this.isAttackerTurn()) {
             return stack.length % 2 === 1 && this.canBeat(card, stack[stack.length - 1]);
         }
-        if (!stack || stack.length !== 0) return false;
+        if (stack.length !== 0) return false;
 
         const tableCards = this.GameStack.reduce((all, s) => all.concat(s), []);
         if (tableCards.length === 0) return true;

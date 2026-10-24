@@ -1,16 +1,3 @@
-/**
- * Игровой экран.
- *
- * Партия полностью авторитетна на сервере (game-service):
- *   GET  /api/games/{gameId}/state
- *   POST /api/games/{gameId}/moves  { type: CARD|MOVE|GRAB|WIN, card?, stack? }
- *   POST /api/games/{gameId}/resign
- *   GET  /api/games/{gameId}/result
- *
- * Клиент только готовит ход, проверяет его для UX и отправляет на сервер.
- * Обновления приходят по WebSocket (`game.state`, `game.finished`), а
- * polling остаётся страховкой при разрыве соединения.
- */
 const Game = (() => {
     let renderer = null;
     let canvas = null;
@@ -70,9 +57,12 @@ const Game = (() => {
         Realtime.on('connected', () => {
             if (active && !finished) loadState(false);
         });
-    }
 
-    /* ----------------------------- lifecycle ------------------------------ */
+        window.addEventListener('beforeunload', resignOnUnload);
+        window.addEventListener('pagehide', event => {
+            if (!event || !event.persisted) resignOnUnload();
+        });
+    }
 
     function start(opts = {}) {
         if (!opts.gameId) {
@@ -132,8 +122,6 @@ const Game = (() => {
     function currentGameId() {
         return gameId;
     }
-
-    /* ------------------------------ state --------------------------------- */
 
     async function loadState(showErrors) {
         if (!active || pollInFlight || !gameId) return;
@@ -222,10 +210,8 @@ const Game = (() => {
         winSent = true;
         Api.games.move(gameId, { type: 'WIN' })
             .then(data => { if (active) applyState(data); })
-            .catch(() => { /* сервер сам завершит партию */ });
+            .catch(() => { });
     }
-
-    /* ------------------------------ render -------------------------------- */
 
     function refresh() {
         if (!session) return;
@@ -256,8 +242,6 @@ const Game = (() => {
     function setStatus(text) {
         if (el.info) el.info.textContent = text;
     }
-
-    /* ------------------------------ pointer ------------------------------- */
 
     function toField(event) {
         const rect = canvas.getBoundingClientRect();
@@ -389,8 +373,6 @@ const Game = (() => {
         refresh();
     }
 
-    /* ------------------------------- moves -------------------------------- */
-
     async function sendMove(move, message) {
         if (busy || finished || !active) return;
 
@@ -467,11 +449,7 @@ const Game = (() => {
     }
 
     function onLeave() {
-        if (!active) {
-            App.goMenu();
-            return;
-        }
-        if (finished) {
+        if (!active || finished) {
             App.goMenu();
             return;
         }
@@ -485,8 +463,6 @@ const Game = (() => {
             onYes: () => App.goMenu(),
         });
     }
-
-    /* ------------------------------- timer -------------------------------- */
 
     function syncTurnTimer() {
         const key = state
@@ -533,25 +509,37 @@ const Game = (() => {
 
     function onTurnTimeout() {
         if (finished || busy || !myTurn()) return;
-
-        setStatus('Время на ход истекло!');
-        if (session.isAttackerTurn()) {
-            if (session.allStacksEmpty()) {
-                const card = session.PlayerCards[0]
-                    .filter(Boolean)
-                    .sort((a, b) => a.power - b.power)[0];
-                if (card) {
-                    sendMove({ type: 'CARD', card, stack: 0 }, 'Время вышло: авто-ход');
-                    return;
-                }
-            }
-            sendMove({ type: 'MOVE' }, 'Время вышло: передача хода');
-        } else {
-            sendMove({ type: 'GRAB' }, 'Время вышло: забираем карты');
-        }
+        sendResign('Время на ход истекло: сдаёмся');
     }
 
-    /* ------------------------------ polling ------------------------------- */
+    async function sendResign(message) {
+        setStatus(message);
+        try {
+            await Api.games.resign(gameId);
+        } catch (e) {
+            if (e.status !== 401 && e.status !== 409) {
+                setStatus('Не удалось сдаться: ' + e.message);
+                return;
+            }
+        }
+        if (active && !finished) await finishGame(null);
+    }
+
+    function resignOnUnload() {
+        if (!active || finished || !gameId) return;
+        const token = Api.getToken();
+        if (!token) return;
+        try {
+            fetch(new URL(
+                '/api/games/' + encodeURIComponent(gameId) + '/resign',
+                CONFIG.apiBase + '/'
+            ), {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + token },
+                keepalive: true,
+            }).catch(() => { });
+        } catch (e) { }
+    }
 
     function startPolling() {
         stopPolling();
@@ -565,8 +553,6 @@ const Game = (() => {
         clearInterval(pollTimer);
         pollTimer = null;
     }
-
-    /* --------------------------- realtime events -------------------------- */
 
     function onRealtimeState(payload) {
         if (!active || finished) return;
@@ -587,8 +573,6 @@ const Game = (() => {
         if (result && result.gameId && gameId && result.gameId !== gameId) return;
         finishGame(result || null);
     }
-
-    /* ----------------------------- game over ------------------------------ */
 
     async function finishGame(result) {
         if (finished || !active) return;
@@ -624,17 +608,10 @@ const Game = (() => {
         }
 
         if (myGen !== gen || !active) return;
-        endScreen(draw ? null : won, res);
+        endScreen(draw ? null : won);
     }
 
-    function endScreen(won, result) {
-        const replayId = result && result.replayId;
-        const summary = {
-            id: replayId,
-            player1: myName,
-            player2: opponentName,
-        };
-
+    function endScreen(won) {
         let title;
         let text;
         if (won === null) {
@@ -642,33 +619,20 @@ const Game = (() => {
             text = 'Партия завершена вничью.';
         } else if (won) {
             title = 'Победа!';
-            text = 'Вы выиграли партию.' + (replayId ? ' Повтор сохранён.' : '');
+            text = 'Вы выиграли партию.';
         } else {
             title = 'Поражение';
             text = 'Вы проиграли. Дурак — ' + (myName || 'вы') + '.';
         }
 
-        if (replayId) {
-            App.showModal({
-                owner: 'game',
-                title,
-                text,
-                yesText: 'Смотреть повтор',
-                noText: 'В меню',
-                onYes: () => App.openReplay(replayId, summary),
-                onNo: () => App.goMenu(),
-                onClose: () => App.goMenu(),
-            });
-        } else {
-            App.showModal({
-                owner: 'game',
-                title,
-                text,
-                showYes: false,
-                closeText: 'В меню',
-                onClose: () => App.goMenu(),
-            });
-        }
+        App.showModal({
+            owner: 'game',
+            title,
+            text,
+            showYes: false,
+            closeText: 'В меню',
+            onClose: () => App.goMenu(),
+        });
     }
 
     function drawResultText(text) {
@@ -728,7 +692,7 @@ const Game = (() => {
                 '#00ffff', '#ffa500', '#8a2be2', '#00008b', '#ffffff'];
             const pieces = [];
             const end = performance.now() + seconds * 1000;
-            try { Sound.play('win'); } catch (e) { /* ignore */ }
+            try { Sound.play('win'); } catch (e) { }
 
             function frame(now) {
                 for (let k = 0; k < 2; k++) {

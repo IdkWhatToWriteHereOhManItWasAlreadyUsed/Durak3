@@ -58,7 +58,3 @@ const RANK_NAMES = {
 function cardName(card) {
     return `${RANK_NAMES[card.power] || card.power} ${SUIT_NAMES[card.suit]}`;
 }
-
-function cardToString(card) {
-    return `${card.suit},${card.power};`;
-}

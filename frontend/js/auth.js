@@ -1,14 +1,3 @@
-/**
- * Аутентификация через auth-service / api-gateway.
- *
- * Единственный способ входа — Google OAuth2:
- *   POST /api/auth/google { code, redirect_uri } -> { id, email, username, accessToken }
- * Полученный accessToken — opaque UUID (НЕ JWT), хранится в localStorage
- * и отправляется как `Authorization: Bearer <token>`.
- *
- * googleClientId берётся из переменной окружения GOOGLE_CLIENT_ID
- * (см. js/oauth.js) либо из window.DURAK_CONFIG / js/config.js.
- */
 const Auth = (() => {
     const USER_KEY = 'durak.user';
     const OAUTH_STATE_KEY = 'durak.oauth.state';
@@ -22,6 +11,8 @@ const Auth = (() => {
         el.google = document.getElementById('btnGoogleLogin');
         el.userName = document.getElementById('userName');
         el.userId = document.getElementById('userId');
+        el.avatar = document.getElementById('userAvatar');
+        el.mark = document.getElementById('userMark');
         el.logout = document.getElementById('btnLogout');
         el.conn = document.getElementById('connStatus');
 
@@ -77,7 +68,7 @@ const Auth = (() => {
         if (!user && Api.getToken()) {
             try {
                 const me = await Api.auth.me();
-                user = { ...readStoredUser(), ...me };
+                user = normalizeUser({ ...readStoredUser(), ...me });
                 saveUser();
             } catch (e) {
                 Api.setToken('');
@@ -118,12 +109,23 @@ const Auth = (() => {
             throw new Error('auth-service не вернул accessToken');
         }
         Api.setToken(response.accessToken);
-        user = {
+        user = normalizeUser({
             id: response.id,
             email: response.email,
-            username: response.username || response.email || ('Игрок #' + response.id),
-        };
+            username: response.username,
+            avatar_url: response.avatar_url,
+        });
         saveUser();
+    }
+
+    function normalizeUser(raw) {
+        raw = raw || {};
+        return {
+            id: raw.id,
+            email: raw.email,
+            username: raw.username || raw.name || raw.email || ('Игрок #' + raw.id),
+            avatarUrl: raw.avatarUrl || raw.avatar_url || '',
+        };
     }
 
     function onAuthenticated(showToast) {
@@ -135,7 +137,7 @@ const Auth = (() => {
 
     async function logout() {
         await Lobby.leave();
-        try { await Api.auth.logout(); } catch (e) { /* токен мог уже истечь */ }
+        try { await Api.auth.logout(); } catch (e) { }
         Api.setToken('');
         clearUser();
         Realtime.disconnect();
@@ -168,6 +170,23 @@ const Auth = (() => {
     function updateUserChip() {
         if (el.userName) el.userName.textContent = user ? (user.username || ('Игрок #' + user.id)) : '';
         if (el.userId) el.userId.textContent = user ? '#' + user.id : '';
+        renderAvatar();
+    }
+
+    function renderAvatar() {
+        const url = user && user.avatarUrl;
+        if (el.avatar) {
+            if (url) {
+                if (el.avatar.getAttribute('src') !== url) el.avatar.src = url;
+                el.avatar.classList.remove('hidden');
+            } else {
+                el.avatar.removeAttribute('src');
+                el.avatar.classList.add('hidden');
+            }
+        }
+        if (el.mark) {
+            el.mark.classList.toggle('hidden', !!url);
+        }
     }
 
     function renderConnection(status) {
@@ -183,7 +202,7 @@ const Auth = (() => {
     }
 
     function saveUser() {
-        try { localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch (e) { /* ignore */ }
+        try { localStorage.setItem(USER_KEY, JSON.stringify(user)); } catch (e) { }
     }
 
     function readStoredUser() {
@@ -192,13 +211,13 @@ const Auth = (() => {
 
     function clearUser() {
         user = null;
-        try { localStorage.removeItem(USER_KEY); } catch (e) { /* ignore */ }
+        try { localStorage.removeItem(USER_KEY); } catch (e) { }
     }
 
     function cleanUrl() {
         try {
             history.replaceState(null, '', location.pathname + location.hash);
-        } catch (e) { /* ignore */ }
+        } catch (e) { }
     }
 
     function randomState() {

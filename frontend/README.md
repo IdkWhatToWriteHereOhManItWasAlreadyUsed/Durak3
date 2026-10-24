@@ -1,21 +1,20 @@
 # Дурак — веб-фронтенд (онлайн-клиент)
 
 Браузерный клиент игры «Дурак» на чистом HTML/CSS/JS (без фреймворков и
-сборки). Ассеты — из оригинального `DurakDotnet/DurakOnCSharp`: спрайт карт
-`Cards.png`, рубашка `Back.png` и звуки `accept/invite/text/win.wav`.
+сборки). Ассеты: спрайт карт `cards.png`, рубашка `back.png` и звуки
+`accept/invite/text/win.wav`.
 
-В отличие от первой версии, клиент **не играет с локальным ботом**. Он работает
-с микросервисами по контрактам из `backend/`:
+Клиент не играет с локальным ботом. Он работает с микросервисами по
+контрактам из `backend/`:
 
 | Контракт | Что использует клиент |
 |---|---|
-| `backend/gateways/apiGateway/openapi.yaml` | HTTP API (`/api/auth`, `/api/lobby`, `/api/invites`, `/api/matches`, `/api/games`, `/api/replays`) |
+| `backend/gateways/apiGateway/openapi.yaml` | HTTP API (`/api/auth`, `/api/lobby`, `/api/invites`, `/api/matches`, `/api/games`) |
 | `backend/gateways/realtimeGateway/openapi.yaml` | WebSocket `/ws?token=...`, события `invite.*`, `game.*`, `lobby.*` |
-| `backend/services/authService/docs/api.md` | Google OAuth2 и opaque accessToken |
+| `backend/services/authService/docs/api.md` | Google OAuth2, opaque accessToken и `avatar_url` |
 | `backend/services/lobbyService/openapi.yaml` | присутствие и heartbeat |
 | `backend/services/matchmakingService/openapi.yaml` | приглашения и матчи |
 | `backend/services/gameService/openapi.yaml` | состояние партии и ходы |
-| `backend/services/replayService/openapi.yaml` | список повторов и кадры |
 
 ## Запуск
 
@@ -28,18 +27,14 @@ node server.js 8080     # другой порт
 `server.js` не только раздаёт статику, но и проксирует запросы, чтобы фронтенд
 и гейтвеи были на одном origin (без CORS):
 
-* `/api/*` → `http://localhost:8080` (`api-gateway`);
-* `/ws`    → `http://localhost:8081/ws` (`realtime-gateway`).
+* `/api/*` → `http://localhost:8222` (`api-gateway`);
+* `/ws`    → `http://localhost:8090/ws` (`realtime-gateway`).
 
 Адреса можно переопределить:
 
 ```bash
 API_TARGET=http://localhost:8080 WS_TARGET=http://localhost:8081 node server.js
 ```
-
-Просто открыть `index.html` файлом тоже можно — тогда клиент по умолчанию
-пойдёт на `http://localhost:8080` и `ws://localhost:8081/ws`, но API-гейтвей
-должен разрешать CORS. Для обычной разработки используйте `node server.js`.
 
 ### Конфигурация
 
@@ -77,6 +72,22 @@ API_TARGET=http://localhost:8080 WS_TARGET=http://localhost:8081 node server.js
 4. Кнопка «Войти через Google» станет активной — клиент отправит authorization
    code на `POST /api/auth/google` и сохранит выданный opaque `accessToken`.
 
+Ответ `POST /api/auth/google` содержит профиль пользователя:
+
+```json
+{
+  "id": 1,
+  "email": "user@gmail.com",
+  "username": "Дмитрий Лазута",
+  "avatar_url": "https://lh3.googleusercontent.com/a/...",
+  "accessToken": "b224a7c6-..."
+}
+```
+
+Аватарка Google (`avatar_url`) сохраняется вместе с профилем и показывается
+в шапке главного меню рядом с именем. Проверка сессии при перезагрузке
+страницы (`GET /api/auth/me`) также обновляет `avatar_url`.
+
 Token хранится в `localStorage` и передаётся как
 `Authorization: Bearer <accessToken>` (WebSocket — как `?token=...`).
 
@@ -88,6 +99,7 @@ Token хранится в `localStorage` и передаётся как
 **Вход (`Auth`):**
 
 * Google OAuth2 (`code` → `POST /api/auth/google`);
+* отображение профиля: имя, id и аватарка Google;
 * проверка сессии через `GET /api/auth/me` при перезагрузке;
 * выход через `DELETE /api/auth/logout`;
 * обработка `401` и `SESSION_EXPIRED` (возврат на экран входа).
@@ -103,8 +115,7 @@ Token хранится в `localStorage` и передаётся как
 * входящие приглашения `GET /api/invites?direction=incoming&status=pending`
   и WS `invite.created`; принятие/отклонение через
   `POST /api/invites/{id}/accept|decline`;
-* активные матчи `GET /api/matches?status=active` и кнопка «Продолжить партию»;
-* список повторов `GET /api/replays`.
+* активные матчи `GET /api/matches?status=active` и кнопка «Продолжить партию».
 
 **Партия (`Game`):**
 
@@ -115,37 +126,34 @@ Token хранится в `localStorage` и передаётся как
   перечитывает состояние;
 * обновления по WS `game.state` / `game.finished` + polling как fallback;
 * сдача `POST /api/games/{gameId}/resign`;
-* результат `GET /api/games/{gameId}/result`, победа/поражение и конфетти;
-* таймер хода (30 секунд) с авто-ходом при истечении.
+* автоматическая сдача: `resign` отправляется при истечении таймера хода
+  (30 секунд), а также при закрытии вкладки/браузера (keepalive-запрос);
+* результат `GET /api/games/{gameId}/result`, победа/поражение и конфетти.
 
-**Повторы (`Replay`):**
+**Звук (`Sound`):**
 
-* `GET /api/replays/{replayId}/frames` — пошаговые состояния;
-* если сервер вернул только метаданные, кадры собираются из
-  `GET /api/replays/{replayId}` (`initialState` + `moves`);
-* кнопки «Назад / Вперёд», подписи ходов.
+* Web Audio API: файлы декодируются один раз и кешируются в буферах;
+* никаких автопроигрываний при загрузке — AudioContext активируется
+  только после действия пользователя.
 
 ## Структура
 
 ```
 frontend/
-├── index.html          экраны входа, меню, игры и повторов
+├── index.html          экраны входа, меню и игры
 ├── server.js           статика + прокси /api и /ws
 ├── css/style.css       оформление
 ├── js/config.js        адреса API/WS и параметры OAuth
 ├── js/oauth.js         googleClientId из окружения (генерируется, см. шаблон)
 ├── js/api.js           HTTP-клиент api-gateway, ApiError, токен
 ├── js/realtime.js      WebSocket-клиент realtime-gateway
-├── js/auth.js          Google OAuth / выход
-├── js/lobby.js         присутствие, игроки, приглашения, матчи, повторы
+├── js/auth.js          Google OAuth / профиль с аватаркой / выход
+├── js/lobby.js         присутствие, игроки, приглашения, матчи
 ├── js/game.js          игровой экран и серверные ходы
-├── js/replay.js        просмотр кадров повтора
 ├── js/state.js         адаптер GameState → модель отрисовки
 ├── js/render.js        отрисовка поля
 ├── js/cards.js         спрайт карт и названия карт
-├── js/engine.js        правила локальной сессии (только fallback повторов)
-├── js/bot.js           старый локальный бот (в онлайн-клиенте не подключён)
-├── js/audio.js         звуки
+├── js/audio.js         звуки (Web Audio API)
 ├── js/app.js           навигация, модалки, toast, загрузка
 └── assets/             cards.png, back.png, *.wav
 ```
@@ -156,5 +164,3 @@ frontend/
   (auth-service), а api-gateway — проксировать `/api/auth/google`.
 * Присутствие и матчи живут на сервере; если api-gateway не реализован,
   интерфейс покажет ошибки сети, а не локальную заглушку.
-* Локальные повторы в `localStorage` больше не пишутся — источник повторов
-  replay-service.

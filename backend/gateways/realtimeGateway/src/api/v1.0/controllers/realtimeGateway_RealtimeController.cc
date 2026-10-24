@@ -20,8 +20,6 @@ SessionManager& Sessions() {
 
 static Json::FastWriter kFastWriter;
 
-// Пароль Redis берём из окружения (прокидывается docker-compose).
-// Fallback — значение из config.json (там пустая строка по умолчанию).
 static std::string GetRedisPassword() {
     if (const char* env = std::getenv("REDIS_PASSWORD")) {
         return env;

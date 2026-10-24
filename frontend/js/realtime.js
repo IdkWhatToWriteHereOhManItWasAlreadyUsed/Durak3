@@ -1,10 +1,3 @@
-/**
- * Клиент realtime-gateway (WebSocket BFF).
- *
- * Контракт: backend/gateways/realtimeGateway/openapi.yaml (AsyncAPI).
- * Handshake: GET /ws?token=<opaque accessToken>.
- * Формат сообщений: { type: string, payload: object }.
- */
 const Realtime = (() => {
     const handlers = new Map();
     const queue = [];
@@ -113,9 +106,7 @@ const Realtime = (() => {
             scheduleReconnect();
         });
 
-        socket.addEventListener('error', () => {
-            // close придёт следом и запустит переподключение.
-        });
+        socket.addEventListener('error', () => { });
     }
 
     function scheduleReconnect() {
@@ -156,7 +147,7 @@ const Realtime = (() => {
         stopPing();
         queue.length = 0;
         if (socket) {
-            try { socket.close(1000, 'logout'); } catch (e) { /* ignore */ }
+            try { socket.close(1000, 'logout'); } catch (e) { }
         }
         socket = null;
         attempts = 0;

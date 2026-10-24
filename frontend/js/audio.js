@@ -6,57 +6,87 @@ const Sound = (() => {
         win: 'assets/win.wav',
     };
 
-    const cache = {};
+    let context = null;
+    const buffers = new Map();
+    const pending = new Map();
     let current = null;
+    let playSeq = 0;
 
-    function get(name) {
-        if (!files[name]) return null;
-        if (!cache[name]) {
-            const a = new Audio(files[name]);
-            a.preload = 'auto';
-            cache[name] = a;
+    function ensureContext() {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        if (!context) context = new Ctx();
+        if (context.state === 'suspended' && context.resume) {
+            context.resume().catch(() => { });
         }
-        return cache[name];
+        return context;
+    }
+
+    function decode(ctx, data) {
+        return new Promise((resolve, reject) => {
+            try { ctx.decodeAudioData(data, resolve, reject); }
+            catch (e) { reject(e); }
+        });
+    }
+
+    function load(name) {
+        if (buffers.has(name)) return Promise.resolve(buffers.get(name));
+        if (!pending.has(name)) {
+            pending.set(name, fetch(files[name])
+                .then(response => {
+                    if (!response.ok) throw new Error(String(response.status));
+                    return response.arrayBuffer();
+                })
+                .then(data => decode(ensureContext(), data))
+                .then(buffer => {
+                    buffers.set(name, buffer);
+                    pending.delete(name);
+                    return buffer;
+                })
+                .catch(() => {
+                    pending.delete(name);
+                    return null;
+                }));
+        }
+        return pending.get(name);
     }
 
     function stop() {
+        playSeq++;
         if (!current) return;
-        try { current.pause(); current.currentTime = 0; } catch (e) { }
+        try { current.source.stop(); } catch (e) { }
         current = null;
     }
 
-    function play(name, volume = 1) {
-        const base = get(name);
-        if (!base) return null;
+    async function play(name, volume = 1) {
+        if (!files[name]) return null;
+        const ctx = ensureContext();
+        if (!ctx) return null;
+
+        const seq = ++playSeq;
+        const buffer = await load(name);
+        if (!buffer || seq !== playSeq) return null;
+
         stop();
-        const a = base.cloneNode();
-        a.muted = false;
-        a.volume = Math.max(0, Math.min(1, volume));
-        current = a;
-        a.addEventListener('ended', () => { if (current === a) current = null; });
-        a.play().catch(() => { });
-        return a;
+
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+
+        const gain = ctx.createGain();
+        gain.gain.value = Math.max(0, Math.min(1, volume));
+
+        source.connect(gain).connect(ctx.destination);
+        source.onended = () => {
+            if (current && current.source === source) current = null;
+        };
+        source.start();
+
+        current = { source, gain };
+        return source;
     }
 
-    function unlock() {
-        window.removeEventListener('pointerdown', unlock);
-        window.removeEventListener('keydown', unlock);
-        for (const name of Object.keys(files)) {
-            const a = get(name);
-            if (!a) continue;
-            a.muted = true;
-            const p = a.play();
-            const done = () => {
-                a.pause();
-                try { a.currentTime = 0; } catch (e) { }
-                a.muted = false;
-            };
-            if (p && p.then) p.then(done).catch(() => { a.muted = false; });
-            else done();
-        }
-    }
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
+    window.addEventListener('pointerdown', ensureContext);
+    window.addEventListener('keydown', ensureContext);
 
-    return { play, stop, unlock };
+    return { play, stop };
 })();
